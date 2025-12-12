@@ -1,0 +1,190 @@
+<?php
+/**
+ * Main Plugin Class
+ *
+ * @package DragonInternalLinks
+ */
+
+namespace DragonInternalLinks;
+
+class Plugin {
+
+    /**
+     * Singleton instance
+     */
+    private static ?Plugin $instance = null;
+
+    /**
+     * Component instances
+     */
+    private ?Admin $admin = null;
+    private ?Scanner $scanner = null;
+    private ?Analyzer $analyzer = null;
+    private ?Scheduler $scheduler = null;
+    private ?Ajax $ajax = null;
+
+    /**
+     * Get singleton instance
+     */
+    public static function get_instance(): Plugin {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
+     * Constructor
+     */
+    private function __construct() {
+        $this->init_components();
+        $this->init_hooks();
+    }
+
+    /**
+     * Initialize plugin components
+     */
+    private function init_components(): void {
+        $this->scanner   = new Scanner();
+        $this->analyzer  = new Analyzer( $this->scanner );
+        $this->scheduler = new Scheduler( $this->scanner, $this->analyzer );
+        $this->ajax      = new Ajax( $this->scanner, $this->analyzer );
+        $this->admin     = new Admin( $this->scanner, $this->analyzer );
+    }
+
+    /**
+     * Initialize WordPress hooks
+     */
+    private function init_hooks(): void {
+        add_action( 'init', [ $this, 'load_textdomain' ] );
+    }
+
+    /**
+     * Load plugin textdomain
+     */
+    public function load_textdomain(): void {
+        load_plugin_textdomain(
+            'dragon-internal-links',
+            false,
+            dirname( DIL_PLUGIN_BASENAME ) . '/languages'
+        );
+    }
+
+    /**
+     * Plugin activation
+     */
+    public static function activate(): void {
+        self::create_tables();
+        self::set_default_options();
+
+        // Schedule cron events
+        if ( ! wp_next_scheduled( 'dil_daily_scan' ) ) {
+            wp_schedule_event( time(), 'daily', 'dil_daily_scan' );
+        }
+
+        // Flush rewrite rules
+        flush_rewrite_rules();
+    }
+
+    /**
+     * Plugin deactivation
+     */
+    public static function deactivate(): void {
+        wp_clear_scheduled_hook( 'dil_daily_scan' );
+        flush_rewrite_rules();
+    }
+
+    /**
+     * Create database tables
+     */
+    private static function create_tables(): void {
+        global $wpdb;
+
+        $charset_collate = $wpdb->get_charset_collate();
+
+        // Links table - stores all internal links found
+        $table_links = $wpdb->prefix . 'dil_links';
+        $sql_links = "CREATE TABLE $table_links (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            source_post_id bigint(20) unsigned NOT NULL,
+            target_post_id bigint(20) unsigned NOT NULL,
+            anchor_text varchar(255) DEFAULT '',
+            context text,
+            link_url varchar(500) NOT NULL,
+            created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY idx_source (source_post_id),
+            KEY idx_target (target_post_id),
+            KEY idx_source_target (source_post_id, target_post_id)
+        ) $charset_collate;";
+
+        // Stats table - cached link counts per post
+        $table_stats = $wpdb->prefix . 'dil_stats';
+        $sql_stats = "CREATE TABLE $table_stats (
+            post_id bigint(20) unsigned NOT NULL,
+            inbound_count int(11) NOT NULL DEFAULT 0,
+            outbound_count int(11) NOT NULL DEFAULT 0,
+            orphan_score float NOT NULL DEFAULT 0,
+            last_scanned timestamp NULL DEFAULT NULL,
+            PRIMARY KEY  (post_id),
+            KEY idx_orphan (orphan_score)
+        ) $charset_collate;";
+
+        // Suggestions table - link opportunities
+        $table_suggestions = $wpdb->prefix . 'dil_suggestions';
+        $sql_suggestions = "CREATE TABLE $table_suggestions (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            source_post_id bigint(20) unsigned NOT NULL,
+            target_post_id bigint(20) unsigned NOT NULL,
+            keyword varchar(255) NOT NULL,
+            context text,
+            relevance_score float NOT NULL DEFAULT 0,
+            status varchar(20) NOT NULL DEFAULT 'pending',
+            created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY idx_status (status),
+            KEY idx_source (source_post_id),
+            KEY idx_relevance (relevance_score)
+        ) $charset_collate;";
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( $sql_links );
+        dbDelta( $sql_stats );
+        dbDelta( $sql_suggestions );
+
+        update_option( 'dil_db_version', DIL_VERSION );
+    }
+
+    /**
+     * Set default plugin options
+     */
+    private static function set_default_options(): void {
+        $defaults = [
+            'dil_post_types'        => [ 'post', 'page' ],
+            'dil_auto_scan'         => true,
+            'dil_min_word_count'    => 3,
+            'dil_exclude_categories' => [],
+            'dil_scan_frequency'    => 'daily',
+        ];
+
+        foreach ( $defaults as $option => $value ) {
+            if ( false === get_option( $option ) ) {
+                add_option( $option, $value );
+            }
+        }
+    }
+
+    /**
+     * Get Scanner instance
+     */
+    public function get_scanner(): Scanner {
+        return $this->scanner;
+    }
+
+    /**
+     * Get Analyzer instance
+     */
+    public function get_analyzer(): Analyzer {
+        return $this->analyzer;
+    }
+}

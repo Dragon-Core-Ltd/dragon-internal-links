@@ -1,0 +1,367 @@
+/**
+ * Dragon Internal Links - Admin Styles
+ */
+
+/* Stats Grid */
+.dil-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.dil-stat-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+}
+
+.dil-stat-card.dil-warning {
+    border-left: 4px solid #dba617;
+    background: #fcf9e8;
+}
+
+.dil-stat-card.dil-danger {
+    border-left: 4px solid #d63638;
+    background: #fcf0f1;
+}
+
+.dil-stat-card.dil-highlight {
+    border-left: 4px solid #2271b1;
+    background: #f0f6fc;
+}
+
+.dil-stat-number {
+    font-size: 36px;
+    font-weight: 600;
+    color: #1d2327;
+    line-height: 1.2;
+}
+
+.dil-stat-label {
+    font-size: 13px;
+    color: #646970;
+    margin-top: 4px;
+}
+
+.dil-stat-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+/* Actions */
+.dil-actions {
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dil-actions .button .dashicons {
+    margin-right: 4px;
+    vertical-align: text-top;
+}
+
+.dil-scan-status {
+    color: #646970;
+    font-style: italic;
+}
+
+/* Progress Bar */
+.dil-progress {
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dil-progress-bar {
+    flex: 1;
+    max-width: 400px;
+    height: 20px;
+    background: #dcdcde;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.dil-progress-fill {
+    height: 100%;
+    background: #2271b1;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.dil-progress-text {
+    font-size: 13px;
+    color: #646970;
+}
+
+/* Last Scan */
+.dil-last-scan {
+    color: #646970;
+    font-size: 13px;
+}
+
+/* Columns Layout */
+.dil-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+/* Cards */
+.dil-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 20px;
+}
+
+.dil-card h2 {
+    margin-top: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.dil-card-danger {
+    border-left: 4px solid #d63638;
+}
+
+/* Tables */
+.dil-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dil-table th,
+.dil-table td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.dil-table th {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.dil-table tbody tr:hover {
+    background: #f6f7f7;
+}
+
+.dil-center {
+    text-align: center;
+}
+
+/* Status badges */
+.dil-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.dil-status-broken {
+    background: #fcf0f1;
+    color: #d63638;
+}
+
+/* Success message */
+.dil-success {
+    color: #00a32a;
+}
+
+.dil-success .dashicons {
+    vertical-align: text-bottom;
+}
+
+/* Empty state */
+.dil-empty {
+    color: #646970;
+    font-style: italic;
+}
+
+/* Description */
+.dil-description {
+    color: #646970;
+    margin-bottom: 20px;
+}
+
+/* Count badge */
+.dil-count {
+    font-weight: normal;
+    color: #646970;
+}
+
+/* Priority badges */
+.dil-priority {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.dil-priority-high {
+    background: #fcf0f1;
+    color: #d63638;
+}
+
+.dil-priority-medium {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+.dil-priority-low {
+    background: #f0f0f1;
+    color: #646970;
+}
+
+/* Badges */
+.dil-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.dil-badge-warning {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+/* Suggestion cards */
+.dil-suggestions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.dil-suggestion-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 16px;
+    transition: box-shadow 0.2s ease;
+}
+
+.dil-suggestion-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dil-suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.dil-suggestion-posts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.dil-arrow {
+    color: #646970;
+    font-size: 18px;
+}
+
+.dil-relevance-score {
+    background: #2271b1;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.dil-suggestion-body {
+    margin-bottom: 12px;
+}
+
+.dil-keyword {
+    margin-bottom: 8px;
+}
+
+.dil-keyword mark,
+.dil-context mark {
+    background: #fff8c5;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+.dil-context blockquote {
+    margin: 8px 0 0;
+    padding: 12px;
+    background: #f6f7f7;
+    border-left: 3px solid #dcdcde;
+    color: #646970;
+    font-style: italic;
+}
+
+.dil-suggestion-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f1;
+}
+
+.dil-suggestion-actions .button .dashicons {
+    margin-right: 4px;
+    vertical-align: text-top;
+}
+
+/* Applied/dismissed animation */
+.dil-suggestion-card.dil-applied,
+.dil-suggestion-card.dil-dismissed {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Post list column */
+.dil-link-stats {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.dil-link-stats.dil-orphan {
+    background: #fcf0f1;
+    color: #d63638;
+}
+
+.dil-no-data {
+    color: #a7aaad;
+}
+
+/* Settings */
+.dil-settings-section {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.dil-settings-section h2 {
+    margin-top: 0;
+}
+
+/* More link */
+.dil-more {
+    color: #646970;
+    font-style: italic;
+    margin-top: 10px;
+}
