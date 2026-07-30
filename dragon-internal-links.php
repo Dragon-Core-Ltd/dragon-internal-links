@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: Dragon Internal Links
- * Plugin URI: https://plugins.dragoncore.ltd/plugins/dragon-internal-links
+ * Plugin URI: https://dragoncore.ltd/plugins/dragon-internal-links
  * Description: Find internal linking opportunities, detect orphan content, and improve your site's SEO structure.
  * Version: 1.0.0
  * Author: Dragon Core
- * Author URI: https://plugins.dragoncore.ltd
+ * Author URI: https://dragoncore.ltd
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: dragon-internal-links
