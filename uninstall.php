@@ -15,15 +15,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 global $wpdb;
 
 // Drop all plugin tables.
-$tables = [
-	$wpdb->prefix . 'dil_links',
-	$wpdb->prefix . 'dil_stats',
-	$wpdb->prefix . 'dil_suggestions',
-];
-
-foreach ( $tables as $table ) {
-	$wpdb->query( "DROP TABLE IF EXISTS {$table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-}
+// phpcs:disable WordPress.DB.DirectDatabaseQuery -- Schema removal on uninstall.
+$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'dil_links' ) );
+$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'dil_stats' ) );
+$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'dil_suggestions' ) );
+// phpcs:enable
 
 // Delete all plugin options.
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dil\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
