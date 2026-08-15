@@ -52,27 +52,27 @@ defined( 'ABSPATH' ) || exit;
 		</div>
 	<?php else : ?>
 		<div class="dil-suggestions-list">
-			<?php foreach ( $suggestions as $dil_suggestion ) : ?>
-				<div class="dil-suggestion-card" data-id="<?php echo esc_attr( $dil_suggestion['id'] ); ?>">
+			<?php foreach ( $suggestions as $dragoninternallinks_suggestion ) : ?>
+				<div class="dil-suggestion-card" data-id="<?php echo esc_attr( $dragoninternallinks_suggestion['id'] ); ?>">
 					<div class="dil-suggestion-header">
 						<div class="dil-suggestion-posts">
 							<span class="dil-from">
 								<strong><?php esc_html_e( 'From:', 'dragon-internal-links' ); ?></strong>
-								<a href="<?php echo esc_url( get_edit_post_link( $dil_suggestion['source_post_id'] ) ); ?>" target="_blank">
-									<?php echo esc_html( $dil_suggestion['source_title'] ); ?>
+								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_suggestion['source_post_id'] ) ); ?>" target="_blank">
+									<?php echo esc_html( $dragoninternallinks_suggestion['source_title'] ); ?>
 								</a>
 							</span>
 							<span class="dil-arrow">→</span>
 							<span class="dil-to">
 								<strong><?php esc_html_e( 'Link to:', 'dragon-internal-links' ); ?></strong>
-								<a href="<?php echo esc_url( get_permalink( $dil_suggestion['target_post_id'] ) ); ?>" target="_blank">
-									<?php echo esc_html( $dil_suggestion['target_title'] ); ?>
+								<a href="<?php echo esc_url( get_permalink( $dragoninternallinks_suggestion['target_post_id'] ) ); ?>" target="_blank">
+									<?php echo esc_html( $dragoninternallinks_suggestion['target_title'] ); ?>
 								</a>
 							</span>
 						</div>
 						<div class="dil-suggestion-relevance">
 							<span class="dil-relevance-score" title="<?php esc_attr_e( 'Relevance Score', 'dragon-internal-links' ); ?>">
-								<?php echo esc_html( number_format( $dil_suggestion['relevance_score'], 1 ) ); ?>
+								<?php echo esc_html( number_format( $dragoninternallinks_suggestion['relevance_score'], 1 ) ); ?>
 							</span>
 						</div>
 					</div>
@@ -80,22 +80,22 @@ defined( 'ABSPATH' ) || exit;
 					<div class="dil-suggestion-body">
 						<div class="dil-keyword">
 							<strong><?php esc_html_e( 'Keyword:', 'dragon-internal-links' ); ?></strong>
-							<mark><?php echo esc_html( $dil_suggestion['keyword'] ); ?></mark>
+							<mark><?php echo esc_html( $dragoninternallinks_suggestion['keyword'] ); ?></mark>
 						</div>
 
 						<div class="dil-context">
 							<strong><?php esc_html_e( 'Context:', 'dragon-internal-links' ); ?></strong>
 							<blockquote>
 								<?php
-								$dil_context = $dil_suggestion['context'];
-								$dil_keyword = $dil_suggestion['keyword'];
+								$dragoninternallinks_context = $dragoninternallinks_suggestion['context'];
+								$dragoninternallinks_keyword = $dragoninternallinks_suggestion['keyword'];
 								// Highlight keyword in context
-								$dil_highlighted = preg_replace(
-									'/(' . preg_quote( $dil_keyword, '/' ) . ')/iu',
+								$dragoninternallinks_highlighted = preg_replace(
+									'/(' . preg_quote( $dragoninternallinks_keyword, '/' ) . ')/iu',
 									'<mark>$1</mark>',
-									esc_html( $dil_context )
+									esc_html( $dragoninternallinks_context )
 								);
-								echo wp_kses( $dil_highlighted, array( 'mark' => array() ) );
+								echo wp_kses( $dragoninternallinks_highlighted, array( 'mark' => array() ) );
 								?>
 							</blockquote>
 						</div>
@@ -110,7 +110,7 @@ defined( 'ABSPATH' ) || exit;
 							<span class="dashicons dashicons-no-alt"></span>
 							<?php esc_html_e( 'Dismiss', 'dragon-internal-links' ); ?>
 						</button>
-						<a href="<?php echo esc_url( get_edit_post_link( $dil_suggestion['source_post_id'] ) ); ?>" class="button" target="_blank">
+						<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_suggestion['source_post_id'] ) ); ?>" class="button" target="_blank">
 							<?php esc_html_e( 'Edit Post', 'dragon-internal-links' ); ?>
 						</a>
 					</div>

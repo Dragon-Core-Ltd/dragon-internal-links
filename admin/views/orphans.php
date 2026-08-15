@@ -60,32 +60,32 @@ defined( 'ABSPATH' ) || exit;
 					</tr>
 				</thead>
 				<tbody>
-					<?php foreach ( $orphans as $dil_post ) : ?>
+					<?php foreach ( $orphans as $dragoninternallinks_post ) : ?>
 						<tr>
 							<td>
 								<strong>
-									<a href="<?php echo esc_url( get_edit_post_link( $dil_post['post_id'] ) ); ?>">
-										<?php echo esc_html( $dil_post['post_title'] ); ?>
+									<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>">
+										<?php echo esc_html( $dragoninternallinks_post['post_title'] ); ?>
 									</a>
 								</strong>
 							</td>
-							<td><?php echo esc_html( $dil_post['post_type'] ); ?></td>
-							<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $dil_post['post_date'] ) ) ); ?></td>
-							<td class="dil-center"><?php echo esc_html( $dil_post['outbound_count'] ); ?></td>
+							<td><?php echo esc_html( $dragoninternallinks_post['post_type'] ); ?></td>
+							<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $dragoninternallinks_post['post_date'] ) ) ); ?></td>
+							<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></td>
 							<td>
 								<?php
-								$dil_score          = (float) $dil_post['orphan_score'];
-								$dil_priority_class = $dil_score > 5 ? 'high' : ( $dil_score > 2 ? 'medium' : 'low' );
+								$dragoninternallinks_score          = (float) $dragoninternallinks_post['orphan_score'];
+								$dragoninternallinks_priority_class = $dragoninternallinks_score > 5 ? 'high' : ( $dragoninternallinks_score > 2 ? 'medium' : 'low' );
 								?>
-								<span class="dil-priority dil-priority-<?php echo esc_attr( $dil_priority_class ); ?>">
-									<?php echo esc_html( ucfirst( $dil_priority_class ) ); ?>
+								<span class="dil-priority dil-priority-<?php echo esc_attr( $dragoninternallinks_priority_class ); ?>">
+									<?php echo esc_html( ucfirst( $dragoninternallinks_priority_class ) ); ?>
 								</span>
 							</td>
 							<td>
-								<a href="<?php echo esc_url( get_permalink( $dil_post['post_id'] ) ); ?>" target="_blank" class="button button-small">
+								<a href="<?php echo esc_url( get_permalink( $dragoninternallinks_post['post_id'] ) ); ?>" target="_blank" class="button button-small">
 									<?php esc_html_e( 'View', 'dragon-internal-links' ); ?>
 								</a>
-								<a href="<?php echo esc_url( get_edit_post_link( $dil_post['post_id'] ) ); ?>" class="button button-small">
+								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>" class="button button-small">
 									<?php esc_html_e( 'Edit', 'dragon-internal-links' ); ?>
 								</a>
 							</td>
@@ -123,19 +123,19 @@ defined( 'ABSPATH' ) || exit;
 					</tr>
 				</thead>
 				<tbody>
-					<?php foreach ( array_slice( $low_outbound, 0, 25 ) as $dil_post ) : ?>
+					<?php foreach ( array_slice( $low_outbound, 0, 25 ) as $dragoninternallinks_post ) : ?>
 						<tr>
 							<td>
-								<a href="<?php echo esc_url( get_edit_post_link( $dil_post['post_id'] ) ); ?>">
-									<?php echo esc_html( $dil_post['post_title'] ); ?>
+								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>">
+									<?php echo esc_html( $dragoninternallinks_post['post_title'] ); ?>
 								</a>
 							</td>
 							<td class="dil-center">
-								<span class="dil-badge dil-badge-warning"><?php echo esc_html( $dil_post['outbound_count'] ); ?></span>
+								<span class="dil-badge dil-badge-warning"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></span>
 							</td>
-							<td class="dil-center"><?php echo esc_html( $dil_post['inbound_count'] ); ?></td>
+							<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['inbound_count'] ); ?></td>
 							<td>
-								<a href="<?php echo esc_url( get_edit_post_link( $dil_post['post_id'] ) ); ?>" class="button button-small button-primary">
+								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>" class="button button-small button-primary">
 									<?php esc_html_e( 'Add Links', 'dragon-internal-links' ); ?>
 								</a>
 							</td>

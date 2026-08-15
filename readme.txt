@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.0.0
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ Yes! Configure which post types to scan in Settings.
 4. Settings page
 
 == Changelog ==
+
+= 1.0.2 =
+* Fix: settings could be lost on a deactivate then reactivate update; the migration now carries each value before removing the old copy.
+
+= 1.0.1 =
+* Renamed all option, hook, function and constant prefixes to the unique `dragoninternallinks_` / `DRAGONINTERNALLINKS_` prefix. Existing settings and the scan schedule are migrated automatically on update; scanned link data is unaffected.
 
 = 1.0.0 =
 * Initial release

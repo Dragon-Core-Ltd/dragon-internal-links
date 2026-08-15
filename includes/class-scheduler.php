@@ -24,7 +24,7 @@ class Scheduler {
 	/**
 	 * Cron hook name
 	 */
-	public const CRON_HOOK = 'dil_daily_scan';
+	public const CRON_HOOK = 'dragoninternallinks_daily_scan';
 
 	/**
 	 * Constructor
@@ -70,16 +70,16 @@ class Scheduler {
 		}
 
 		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local timestamp is intentional; displayed via date_i18n().
-		update_option( 'dil_last_scan', current_time( 'timestamp' ) );
-		update_option( 'dil_last_scan_count', $result['total'] );
+		update_option( 'dragoninternallinks_last_scan', current_time( 'timestamp' ) );
+		update_option( 'dragoninternallinks_last_scan_count', $result['total'] );
 	}
 
 	/**
 	 * Get last scan info
 	 */
 	public function get_last_scan_info(): array {
-		$timestamp = get_option( 'dil_last_scan', 0 );
-		$count     = get_option( 'dil_last_scan_count', 0 );
+		$timestamp = get_option( 'dragoninternallinks_last_scan', 0 );
+		$count     = get_option( 'dragoninternallinks_last_scan_count', 0 );
 
 		return array(
 			'timestamp' => $timestamp,

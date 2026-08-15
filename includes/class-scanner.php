@@ -47,7 +47,7 @@ class Scanner {
 		}
 
 		// Check if post type should be scanned
-		$post_types = get_option( 'dil_post_types', array( 'post', 'page' ) );
+		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 		if ( ! in_array( $post->post_type, $post_types, true ) ) {
 			return array();
 		}
@@ -346,7 +346,7 @@ class Scanner {
 	 * @return array ['scanned' => int, 'total' => int, 'complete' => bool]
 	 */
 	public function scan_all( int $batch_size = 50, int $offset = 0 ): array {
-		$post_types = get_option( 'dil_post_types', array( 'post', 'page' ) );
+		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 
 		$args = array(
 			'post_type'      => $post_types,
@@ -420,7 +420,7 @@ class Scanner {
 		}
 
 		// Skip if auto-scan disabled
-		if ( ! get_option( 'dil_auto_scan', true ) ) {
+		if ( ! get_option( 'dragoninternallinks_auto_scan', true ) ) {
 			return;
 		}
 

@@ -127,15 +127,15 @@ defined( 'ABSPATH' ) || exit;
 							</tr>
 						</thead>
 						<tbody>
-							<?php foreach ( $top_linked as $dil_post ) : ?>
+							<?php foreach ( $top_linked as $dragoninternallinks_post ) : ?>
 								<tr>
 									<td>
-										<a href="<?php echo esc_url( get_edit_post_link( $dil_post['post_id'] ) ); ?>">
-											<?php echo esc_html( $dil_post['post_title'] ); ?>
+										<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>">
+											<?php echo esc_html( $dragoninternallinks_post['post_title'] ); ?>
 										</a>
 									</td>
-									<td class="dil-center"><?php echo esc_html( $dil_post['inbound_count'] ); ?></td>
-									<td class="dil-center"><?php echo esc_html( $dil_post['outbound_count'] ); ?></td>
+									<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['inbound_count'] ); ?></td>
+									<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></td>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -164,19 +164,19 @@ defined( 'ABSPATH' ) || exit;
 							</tr>
 						</thead>
 						<tbody>
-							<?php foreach ( array_slice( $broken_links, 0, 10 ) as $dil_link ) : ?>
+							<?php foreach ( array_slice( $broken_links, 0, 10 ) as $dragoninternallinks_link ) : ?>
 								<tr>
 									<td>
-										<a href="<?php echo esc_url( get_edit_post_link( $dil_link['source_post_id'] ) ); ?>">
-											<?php echo esc_html( $dil_link['source_title'] ); ?>
+										<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_link['source_post_id'] ) ); ?>">
+											<?php echo esc_html( $dragoninternallinks_link['source_title'] ); ?>
 										</a>
 									</td>
 									<td>
-										<code><?php echo esc_html( $dil_link['anchor_text'] ? $dil_link['anchor_text'] : $dil_link['link_url'] ); ?></code>
+										<code><?php echo esc_html( $dragoninternallinks_link['anchor_text'] ? $dragoninternallinks_link['anchor_text'] : $dragoninternallinks_link['link_url'] ); ?></code>
 									</td>
 									<td>
 										<span class="dil-status-badge dil-status-broken">
-											<?php echo esc_html( $dil_link['target_status'] ?? 'deleted' ); ?>
+											<?php echo esc_html( $dragoninternallinks_link['target_status'] ?? 'deleted' ); ?>
 										</span>
 									</td>
 								</tr>

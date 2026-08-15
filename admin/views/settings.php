@@ -31,10 +31,10 @@ defined( 'ABSPATH' ) || exit;
 		</a>
 	</nav>
 
-	<?php settings_errors( 'dil_settings' ); ?>
+	<?php settings_errors( 'dragoninternallinks_settings' ); ?>
 
 	<form method="post" action="">
-		<?php wp_nonce_field( 'dil_save_settings', 'dil_settings_nonce' ); ?>
+		<?php wp_nonce_field( 'dragoninternallinks_save_settings', 'dragoninternallinks_settings_nonce' ); ?>
 
 		<div class="dil-settings-section">
 			<h2><?php esc_html_e( 'Scanning Options', 'dragon-internal-links' ); ?></h2>
@@ -44,20 +44,20 @@ defined( 'ABSPATH' ) || exit;
 					<th scope="row"><?php esc_html_e( 'Post Types to Scan', 'dragon-internal-links' ); ?></th>
 					<td>
 						<?php
-						$dil_post_types = get_post_types( array( 'public' => true ), 'objects' );
-						$dil_selected   = (array) $settings['post_types'];
+						$dragoninternallinks_post_types = get_post_types( array( 'public' => true ), 'objects' );
+						$dragoninternallinks_selected   = (array) $settings['post_types'];
 
-						foreach ( $dil_post_types as $dil_post_type ) :
-							if ( 'attachment' === $dil_post_type->name ) {
+						foreach ( $dragoninternallinks_post_types as $dragoninternallinks_post_type ) :
+							if ( 'attachment' === $dragoninternallinks_post_type->name ) {
 								continue;
 							}
 							?>
 							<label>
 								<input type="checkbox"
-										name="dil_post_types[]"
-										value="<?php echo esc_attr( $dil_post_type->name ); ?>"
-										<?php checked( in_array( $dil_post_type->name, $dil_selected, true ) ); ?>>
-								<?php echo esc_html( $dil_post_type->label ); ?>
+										name="dragoninternallinks_post_types[]"
+										value="<?php echo esc_attr( $dragoninternallinks_post_type->name ); ?>"
+										<?php checked( in_array( $dragoninternallinks_post_type->name, $dragoninternallinks_selected, true ) ); ?>>
+								<?php echo esc_html( $dragoninternallinks_post_type->label ); ?>
 							</label><br>
 						<?php endforeach; ?>
 					</td>
@@ -65,13 +65,13 @@ defined( 'ABSPATH' ) || exit;
 
 				<tr>
 					<th scope="row">
-						<label for="dil_auto_scan"><?php esc_html_e( 'Auto-scan on Save', 'dragon-internal-links' ); ?></label>
+						<label for="dragoninternallinks_auto_scan"><?php esc_html_e( 'Auto-scan on Save', 'dragon-internal-links' ); ?></label>
 					</th>
 					<td>
 						<label>
 							<input type="checkbox"
-									id="dil_auto_scan"
-									name="dil_auto_scan"
+									id="dragoninternallinks_auto_scan"
+									name="dragoninternallinks_auto_scan"
 									value="1"
 									<?php checked( $settings['auto_scan'] ); ?>>
 							<?php esc_html_e( 'Automatically scan posts when they are saved', 'dragon-internal-links' ); ?>
@@ -81,10 +81,10 @@ defined( 'ABSPATH' ) || exit;
 
 				<tr>
 					<th scope="row">
-						<label for="dil_scan_frequency"><?php esc_html_e( 'Full Scan Frequency', 'dragon-internal-links' ); ?></label>
+						<label for="dragoninternallinks_scan_frequency"><?php esc_html_e( 'Full Scan Frequency', 'dragon-internal-links' ); ?></label>
 					</th>
 					<td>
-						<select id="dil_scan_frequency" name="dil_scan_frequency">
+						<select id="dragoninternallinks_scan_frequency" name="dragoninternallinks_scan_frequency">
 							<option value="daily" <?php selected( $settings['scan_frequency'], 'daily' ); ?>>
 								<?php esc_html_e( 'Daily', 'dragon-internal-links' ); ?>
 							</option>
@@ -106,12 +106,12 @@ defined( 'ABSPATH' ) || exit;
 			<table class="form-table">
 				<tr>
 					<th scope="row">
-						<label for="dil_min_word_count"><?php esc_html_e( 'Minimum Keyword Words', 'dragon-internal-links' ); ?></label>
+						<label for="dragoninternallinks_min_word_count"><?php esc_html_e( 'Minimum Keyword Words', 'dragon-internal-links' ); ?></label>
 					</th>
 					<td>
 						<input type="number"
-								id="dil_min_word_count"
-								name="dil_min_word_count"
+								id="dragoninternallinks_min_word_count"
+								name="dragoninternallinks_min_word_count"
 								value="<?php echo esc_attr( $settings['min_word_count'] ); ?>"
 								min="1"
 								max="10"
@@ -126,17 +126,17 @@ defined( 'ABSPATH' ) || exit;
 					<th scope="row"><?php esc_html_e( 'Exclude Categories', 'dragon-internal-links' ); ?></th>
 					<td>
 						<?php
-						$dil_categories = get_categories( array( 'hide_empty' => false ) );
-						$dil_excluded   = (array) $settings['exclude_categories'];
+						$dragoninternallinks_categories = get_categories( array( 'hide_empty' => false ) );
+						$dragoninternallinks_excluded   = (array) $settings['exclude_categories'];
 
-						foreach ( $dil_categories as $dil_category ) :
+						foreach ( $dragoninternallinks_categories as $dragoninternallinks_category ) :
 							?>
 							<label>
 								<input type="checkbox"
-										name="dil_exclude_categories[]"
-										value="<?php echo esc_attr( $dil_category->term_id ); ?>"
-										<?php checked( in_array( $dil_category->term_id, $dil_excluded, true ) ); ?>>
-								<?php echo esc_html( $dil_category->name ); ?>
+										name="dragoninternallinks_exclude_categories[]"
+										value="<?php echo esc_attr( $dragoninternallinks_category->term_id ); ?>"
+										<?php checked( in_array( $dragoninternallinks_category->term_id, $dragoninternallinks_excluded, true ) ); ?>>
+								<?php echo esc_html( $dragoninternallinks_category->name ); ?>
 							</label><br>
 						<?php endforeach; ?>
 						<p class="description">

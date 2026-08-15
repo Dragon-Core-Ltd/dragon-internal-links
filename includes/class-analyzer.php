@@ -33,7 +33,7 @@ class Analyzer {
 		global $wpdb;
 
 		$table_stats  = $wpdb->prefix . 'dil_stats';
-		$post_types   = get_option( 'dil_post_types', array( 'post', 'page' ) );
+		$post_types   = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 		$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); $placeholders is a dynamically generated list of %s placeholders.
@@ -67,7 +67,7 @@ class Analyzer {
 		global $wpdb;
 
 		$table_stats  = $wpdb->prefix . 'dil_stats';
-		$post_types   = get_option( 'dil_post_types', array( 'post', 'page' ) );
+		$post_types   = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 		$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); $placeholders is a dynamically generated list of %s placeholders.
@@ -134,8 +134,8 @@ class Analyzer {
 		}
 
 		$suggestions = array();
-		$post_types  = get_option( 'dil_post_types', array( 'post', 'page' ) );
-		$min_words   = (int) get_option( 'dil_min_word_count', 3 );
+		$post_types  = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
+		$min_words   = (int) get_option( 'dragoninternallinks_min_word_count', 3 );
 
 		// Get existing outbound links to avoid duplicates
 		$existing_links  = $this->scanner->get_post_links( $post_id );
@@ -220,7 +220,7 @@ class Analyzer {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
 		$wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
 
-		$post_types = get_option( 'dil_post_types', array( 'post', 'page' ) );
+		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 
 		$posts = get_posts(
 			array(

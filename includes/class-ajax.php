@@ -35,18 +35,18 @@ class Ajax {
 	 * Initialize hooks
 	 */
 	private function init_hooks(): void {
-		add_action( 'wp_ajax_dil_scan_all', array( $this, 'handle_scan_all' ) );
-		add_action( 'wp_ajax_dil_scan_post', array( $this, 'handle_scan_post' ) );
-		add_action( 'wp_ajax_dil_generate_suggestions', array( $this, 'handle_generate_suggestions' ) );
-		add_action( 'wp_ajax_dil_dismiss_suggestion', array( $this, 'handle_dismiss_suggestion' ) );
-		add_action( 'wp_ajax_dil_apply_suggestion', array( $this, 'handle_apply_suggestion' ) );
+		add_action( 'wp_ajax_dragoninternallinks_scan_all', array( $this, 'handle_scan_all' ) );
+		add_action( 'wp_ajax_dragoninternallinks_scan_post', array( $this, 'handle_scan_post' ) );
+		add_action( 'wp_ajax_dragoninternallinks_generate_suggestions', array( $this, 'handle_generate_suggestions' ) );
+		add_action( 'wp_ajax_dragoninternallinks_dismiss_suggestion', array( $this, 'handle_dismiss_suggestion' ) );
+		add_action( 'wp_ajax_dragoninternallinks_apply_suggestion', array( $this, 'handle_apply_suggestion' ) );
 	}
 
 	/**
 	 * Handle scan all posts request
 	 */
 	public function handle_scan_all(): void {
-		check_ajax_referer( 'dil_admin_nonce', 'nonce' );
+		check_ajax_referer( 'dragoninternallinks_admin_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
@@ -59,8 +59,8 @@ class Ajax {
 
 		if ( $result['complete'] ) {
 			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local timestamp is intentional; displayed via date_i18n().
-			update_option( 'dil_last_scan', current_time( 'timestamp' ) );
-			update_option( 'dil_last_scan_count', $result['total'] );
+			update_option( 'dragoninternallinks_last_scan', current_time( 'timestamp' ) );
+			update_option( 'dragoninternallinks_last_scan_count', $result['total'] );
 		}
 
 		wp_send_json_success(
@@ -82,7 +82,7 @@ class Ajax {
 	 * Handle scan single post request
 	 */
 	public function handle_scan_post(): void {
-		check_ajax_referer( 'dil_admin_nonce', 'nonce' );
+		check_ajax_referer( 'dragoninternallinks_admin_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
@@ -109,7 +109,7 @@ class Ajax {
 	 * Handle generate suggestions request
 	 */
 	public function handle_generate_suggestions(): void {
-		check_ajax_referer( 'dil_admin_nonce', 'nonce' );
+		check_ajax_referer( 'dragoninternallinks_admin_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
@@ -130,7 +130,7 @@ class Ajax {
 	 * Handle dismiss suggestion request
 	 */
 	public function handle_dismiss_suggestion(): void {
-		check_ajax_referer( 'dil_admin_nonce', 'nonce' );
+		check_ajax_referer( 'dragoninternallinks_admin_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
@@ -155,7 +155,7 @@ class Ajax {
 	 * Handle apply suggestion request
 	 */
 	public function handle_apply_suggestion(): void {
-		check_ajax_referer( 'dil_admin_nonce', 'nonce' );
+		check_ajax_referer( 'dragoninternallinks_admin_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );

@@ -21,7 +21,7 @@
                 url: dilAdmin.ajaxUrl,
                 type: 'POST',
                 data: {
-                    action: 'dil_scan_all',
+                    action: 'dragoninternallinks_scan_all',
                     nonce: dilAdmin.nonce,
                     offset: offset
                 },
@@ -73,7 +73,7 @@
             url: dilAdmin.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dil_generate_suggestions',
+                action: 'dragoninternallinks_generate_suggestions',
                 nonce: dilAdmin.nonce
             },
             success: function(response) {
@@ -112,7 +112,7 @@
             url: dilAdmin.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dil_apply_suggestion',
+                action: 'dragoninternallinks_apply_suggestion',
                 nonce: dilAdmin.nonce,
                 suggestion_id: suggestionId
             },
@@ -149,7 +149,7 @@
             url: dilAdmin.ajaxUrl,
             type: 'POST',
             data: {
-                action: 'dil_dismiss_suggestion',
+                action: 'dragoninternallinks_dismiss_suggestion',
                 nonce: dilAdmin.nonce,
                 suggestion_id: suggestionId
             },

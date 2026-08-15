@@ -94,16 +94,16 @@ class Admin {
 
 		wp_enqueue_style(
 			'dil-admin',
-			DIL_PLUGIN_URL . 'admin/css/admin.css',
+			DRAGONINTERNALLINKS_PLUGIN_URL . 'admin/css/admin.css',
 			array(),
-			DIL_VERSION
+			DRAGONINTERNALLINKS_VERSION
 		);
 
 		wp_enqueue_script(
 			'dil-admin',
-			DIL_PLUGIN_URL . 'admin/js/admin.js',
+			DRAGONINTERNALLINKS_PLUGIN_URL . 'admin/js/admin.js',
 			array( 'jquery' ),
-			DIL_VERSION,
+			DRAGONINTERNALLINKS_VERSION,
 			true
 		);
 
@@ -112,7 +112,7 @@ class Admin {
 			'dilAdmin',
 			array(
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'dil_admin_nonce' ),
+				'nonce'   => wp_create_nonce( 'dragoninternallinks_admin_nonce' ),
 				'i18n'    => array(
 					'scanning'     => __( 'Scanning...', 'dragon-internal-links' ),
 					'scanComplete' => __( 'Scan complete!', 'dragon-internal-links' ),
@@ -131,10 +131,10 @@ class Admin {
 		$summary      = $this->analyzer->get_summary();
 		$top_linked   = $this->analyzer->get_top_linked_posts( 10 );
 		$broken_links = $this->scanner->find_broken_links();
-		$last_scan    = get_option( 'dil_last_scan', 0 );
+		$last_scan    = get_option( 'dragoninternallinks_last_scan', 0 );
 		$current_tab  = 'dashboard';
 
-		include DIL_PLUGIN_DIR . 'admin/views/dashboard.php';
+		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/dashboard.php';
 	}
 
 	/**
@@ -145,7 +145,7 @@ class Admin {
 		$low_outbound = $this->analyzer->get_low_outbound_posts( 50 );
 		$current_tab  = 'orphans';
 
-		include DIL_PLUGIN_DIR . 'admin/views/orphans.php';
+		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/orphans.php';
 	}
 
 	/**
@@ -155,7 +155,7 @@ class Admin {
 		$suggestions = $this->analyzer->get_suggestions( 100 );
 		$current_tab = 'suggestions';
 
-		include DIL_PLUGIN_DIR . 'admin/views/suggestions.php';
+		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/suggestions.php';
 	}
 
 	/**
@@ -164,14 +164,14 @@ class Admin {
 	public function render_settings_page(): void {
 		// Handle form submission.
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; nonce is verified in save_settings().
-		if ( isset( $_POST['dil_settings_nonce'] ) ) {
+		if ( isset( $_POST['dragoninternallinks_settings_nonce'] ) ) {
 			$this->save_settings();
 		}
 
 		$settings    = $this->get_settings();
 		$current_tab = 'settings';
 
-		include DIL_PLUGIN_DIR . 'admin/views/settings.php';
+		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/settings.php';
 	}
 
 	/**
@@ -179,11 +179,11 @@ class Admin {
 	 */
 	private function get_settings(): array {
 		return array(
-			'post_types'         => get_option( 'dil_post_types', array( 'post', 'page' ) ),
-			'auto_scan'          => get_option( 'dil_auto_scan', true ),
-			'min_word_count'     => get_option( 'dil_min_word_count', 3 ),
-			'exclude_categories' => get_option( 'dil_exclude_categories', array() ),
-			'scan_frequency'     => get_option( 'dil_scan_frequency', 'daily' ),
+			'post_types'         => get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) ),
+			'auto_scan'          => get_option( 'dragoninternallinks_auto_scan', true ),
+			'min_word_count'     => get_option( 'dragoninternallinks_min_word_count', 3 ),
+			'exclude_categories' => get_option( 'dragoninternallinks_exclude_categories', array() ),
+			'scan_frequency'     => get_option( 'dragoninternallinks_scan_frequency', 'daily' ),
 		);
 	}
 
@@ -191,7 +191,7 @@ class Admin {
 	 * Save settings
 	 */
 	private function save_settings(): void {
-		if ( ! isset( $_POST['dil_settings_nonce'] ) || ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['dil_settings_nonce'] ) ), 'dil_save_settings' ) ) {
+		if ( ! isset( $_POST['dragoninternallinks_settings_nonce'] ) || ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['dragoninternallinks_settings_nonce'] ) ), 'dragoninternallinks_save_settings' ) ) {
 			return;
 		}
 
@@ -199,31 +199,31 @@ class Admin {
 			return;
 		}
 
-		if ( isset( $_POST['dil_post_types'] ) ) {
-			$post_types = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['dil_post_types'] ) );
-			update_option( 'dil_post_types', $post_types );
+		if ( isset( $_POST['dragoninternallinks_post_types'] ) ) {
+			$post_types = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['dragoninternallinks_post_types'] ) );
+			update_option( 'dragoninternallinks_post_types', $post_types );
 		} else {
-			update_option( 'dil_post_types', array() );
+			update_option( 'dragoninternallinks_post_types', array() );
 		}
 
-		update_option( 'dil_auto_scan', isset( $_POST['dil_auto_scan'] ) );
+		update_option( 'dragoninternallinks_auto_scan', isset( $_POST['dragoninternallinks_auto_scan'] ) );
 
-		if ( isset( $_POST['dil_min_word_count'] ) ) {
-			update_option( 'dil_min_word_count', absint( $_POST['dil_min_word_count'] ) );
+		if ( isset( $_POST['dragoninternallinks_min_word_count'] ) ) {
+			update_option( 'dragoninternallinks_min_word_count', absint( $_POST['dragoninternallinks_min_word_count'] ) );
 		}
 
-		if ( isset( $_POST['dil_exclude_categories'] ) ) {
-			$cats = array_map( 'absint', (array) $_POST['dil_exclude_categories'] );
-			update_option( 'dil_exclude_categories', $cats );
+		if ( isset( $_POST['dragoninternallinks_exclude_categories'] ) ) {
+			$cats = array_map( 'absint', (array) $_POST['dragoninternallinks_exclude_categories'] );
+			update_option( 'dragoninternallinks_exclude_categories', $cats );
 		} else {
-			update_option( 'dil_exclude_categories', array() );
+			update_option( 'dragoninternallinks_exclude_categories', array() );
 		}
 
-		if ( isset( $_POST['dil_scan_frequency'] ) ) {
-			update_option( 'dil_scan_frequency', sanitize_text_field( wp_unslash( $_POST['dil_scan_frequency'] ) ) );
+		if ( isset( $_POST['dragoninternallinks_scan_frequency'] ) ) {
+			update_option( 'dragoninternallinks_scan_frequency', sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_scan_frequency'] ) ) );
 		}
 
-		add_settings_error( 'dil_settings', 'settings_saved', __( 'Settings saved.', 'dragon-internal-links' ), 'success' );
+		add_settings_error( 'dragoninternallinks_settings', 'settings_saved', __( 'Settings saved.', 'dragon-internal-links' ), 'success' );
 	}
 
 	/**

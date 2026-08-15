@@ -37,7 +37,45 @@ class Plugin {
 	 * Constructor
 	 */
 	private function __construct() {
+		self::migrate_legacy_prefix();
 		$this->init_components();
+	}
+
+	/**
+	 * Move options and the scan schedule off the pre-1.0.1 three-letter (dil_)
+	 * prefix.
+	 *
+	 * The prefix was renamed to the namespace-derived `dragoninternallinks_` to
+	 * satisfy the WordPress.org uniqueness rule. Option values are carried across
+	 * once and the daily-scan cron is re-pointed at the renamed hook. The links,
+	 * stats and suggestions tables keep their names (matched by exact name), so
+	 * scanned link data is untouched.
+	 */
+	private static function migrate_legacy_prefix(): void {
+		// db_version is a schema marker managed by activation, not user data.
+		delete_option( 'dil_db_version' );
+
+		$options = array( 'auto_scan', 'exclude_categories', 'last_scan', 'last_scan_count', 'min_word_count', 'post_types', 'scan_frequency' );
+
+		// Copy each legacy value onto the new name, then remove the legacy copy —
+		// per option, so the delete only ever runs after a successful copy. (A
+		// single shared guard would delete on a deactivate/reactivate cycle, where
+		// activation re-stamps the new db_version before the copy could run.)
+		foreach ( $options as $name ) {
+			$legacy = get_option( 'dil_' . $name, null );
+			if ( null !== $legacy ) {
+				update_option( 'dragoninternallinks_' . $name, $legacy );
+				delete_option( 'dil_' . $name );
+			}
+		}
+
+		$legacy_cron = wp_next_scheduled( 'dil_daily_scan' );
+		if ( $legacy_cron ) {
+			wp_unschedule_event( $legacy_cron, 'dil_daily_scan' );
+		}
+		if ( ! wp_next_scheduled( 'dragoninternallinks_daily_scan' ) ) {
+			wp_schedule_event( time(), 'daily', 'dragoninternallinks_daily_scan' );
+		}
 	}
 
 	/**
@@ -59,8 +97,8 @@ class Plugin {
 		self::set_default_options();
 
 		// Schedule cron events
-		if ( ! wp_next_scheduled( 'dil_daily_scan' ) ) {
-			wp_schedule_event( time(), 'daily', 'dil_daily_scan' );
+		if ( ! wp_next_scheduled( 'dragoninternallinks_daily_scan' ) ) {
+			wp_schedule_event( time(), 'daily', 'dragoninternallinks_daily_scan' );
 		}
 
 		// Flush rewrite rules
@@ -71,7 +109,7 @@ class Plugin {
 	 * Plugin deactivation
 	 */
 	public static function deactivate(): void {
-		wp_clear_scheduled_hook( 'dil_daily_scan' );
+		wp_clear_scheduled_hook( 'dragoninternallinks_daily_scan' );
 		flush_rewrite_rules();
 	}
 
@@ -133,7 +171,7 @@ class Plugin {
 		dbDelta( $sql_stats );
 		dbDelta( $sql_suggestions );
 
-		update_option( 'dil_db_version', DIL_VERSION );
+		update_option( 'dragoninternallinks_db_version', DRAGONINTERNALLINKS_VERSION );
 	}
 
 	/**
@@ -141,11 +179,11 @@ class Plugin {
 	 */
 	private static function set_default_options(): void {
 		$defaults = array(
-			'dil_post_types'         => array( 'post', 'page' ),
-			'dil_auto_scan'          => true,
-			'dil_min_word_count'     => 3,
-			'dil_exclude_categories' => array(),
-			'dil_scan_frequency'     => 'daily',
+			'dragoninternallinks_post_types'         => array( 'post', 'page' ),
+			'dragoninternallinks_auto_scan'          => true,
+			'dragoninternallinks_min_word_count'     => 3,
+			'dragoninternallinks_exclude_categories' => array(),
+			'dragoninternallinks_scan_frequency'     => 'daily',
 		);
 
 		foreach ( $defaults as $option => $value ) {
