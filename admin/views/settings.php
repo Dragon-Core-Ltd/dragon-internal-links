@@ -147,6 +147,70 @@ defined( 'ABSPATH' ) || exit;
 			</table>
 		</div>
 
+		<div class="dil-settings-section">
+			<h2><?php esc_html_e( 'AI Suggestion Ranking', 'dragon-internal-links' ); ?></h2>
+			<p class="description">
+				<?php esc_html_e( 'Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. One small request per post when generating suggestions; your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring.', 'dragon-internal-links' ); ?>
+			</p>
+
+			<table class="form-table">
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Enable AI ranking', 'dragon-internal-links' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" name="dragoninternallinks_ai_enabled" value="1" <?php checked( (bool) get_option( 'dragoninternallinks_ai_enabled', false ) ); ?>>
+							<?php esc_html_e( 'Use an AI model to score suggestion relevance', 'dragon-internal-links' ); ?>
+						</label>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="dragoninternallinks_ai_provider"><?php esc_html_e( 'Provider', 'dragon-internal-links' ); ?></label>
+					</th>
+					<td>
+						<?php $dragoninternallinks_ai_provider = \DragonInternalLinks\AI_Ranker::provider(); ?>
+						<select id="dragoninternallinks_ai_provider" name="dragoninternallinks_ai_provider">
+							<option value="openai" <?php selected( $dragoninternallinks_ai_provider, 'openai' ); ?>>OpenAI</option>
+							<option value="anthropic" <?php selected( $dragoninternallinks_ai_provider, 'anthropic' ); ?>>Anthropic (Claude)</option>
+							<option value="google" <?php selected( $dragoninternallinks_ai_provider, 'google' ); ?>>Google (Gemini)</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="dragoninternallinks_ai_model"><?php esc_html_e( 'Model', 'dragon-internal-links' ); ?></label>
+					</th>
+					<td>
+						<input type="text"
+								id="dragoninternallinks_ai_model"
+								name="dragoninternallinks_ai_model"
+								value="<?php echo esc_attr( (string) get_option( 'dragoninternallinks_ai_model', '' ) ); ?>"
+								class="regular-text"
+								placeholder="<?php echo esc_attr( \DragonInternalLinks\AI_Ranker::DEFAULT_MODELS[ $dragoninternallinks_ai_provider ] ?? '' ); ?>">
+						<p class="description">
+							<?php esc_html_e( 'Leave blank for the provider default. A small, cheap model is plenty for ranking.', 'dragon-internal-links' ); ?>
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
+						<label for="dragoninternallinks_ai_api_key"><?php esc_html_e( 'API key', 'dragon-internal-links' ); ?></label>
+					</th>
+					<td>
+						<input type="password"
+								id="dragoninternallinks_ai_api_key"
+								name="dragoninternallinks_ai_api_key"
+								value="<?php echo '' !== \DragonInternalLinks\AI_Ranker::api_key() ? '••••••••' : ''; ?>"
+								class="regular-text"
+								autocomplete="off">
+						<p class="description">
+							<?php esc_html_e( 'Stored encrypted. Leave the dots untouched to keep the saved key; clear the field to remove it.', 'dragon-internal-links' ); ?>
+						</p>
+					</td>
+				</tr>
+			</table>
+		</div>
+
 		<?php submit_button( __( 'Save Settings', 'dragon-internal-links' ) ); ?>
 	</form>
 </div>

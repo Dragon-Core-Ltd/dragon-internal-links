@@ -223,6 +223,31 @@ class Admin {
 			update_option( 'dragoninternallinks_scan_frequency', sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_scan_frequency'] ) ) );
 		}
 
+		// AI re-ranking (bring-your-own key).
+		update_option( 'dragoninternallinks_ai_enabled', isset( $_POST['dragoninternallinks_ai_enabled'] ) );
+
+		if ( isset( $_POST['dragoninternallinks_ai_provider'] ) ) {
+			$provider = sanitize_key( wp_unslash( $_POST['dragoninternallinks_ai_provider'] ) );
+			if ( in_array( $provider, array( 'openai', 'anthropic', 'google' ), true ) ) {
+				update_option( 'dragoninternallinks_ai_provider', $provider );
+			}
+		}
+
+		if ( isset( $_POST['dragoninternallinks_ai_model'] ) ) {
+			$model = sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_ai_model'] ) );
+			update_option( 'dragoninternallinks_ai_model', $model );
+		}
+
+		if ( isset( $_POST['dragoninternallinks_ai_api_key'] ) ) {
+			$submitted = trim( sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_ai_api_key'] ) ) );
+			if ( '' === $submitted ) {
+				delete_option( 'dragoninternallinks_ai_api_key' );
+			} elseif ( '••••••••' !== $submitted ) {
+				// The masked placeholder means "keep the stored key".
+				update_option( 'dragoninternallinks_ai_api_key', AI_Ranker::encrypt_key( $submitted ) );
+			}
+		}
+
 		add_settings_error( 'dragoninternallinks_settings', 'settings_saved', __( 'Settings saved.', 'dragon-internal-links' ), 'success' );
 	}
 

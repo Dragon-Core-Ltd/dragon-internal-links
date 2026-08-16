@@ -185,6 +185,11 @@ class Analyzer {
 			}
 		}
 
+		// Re-score: TF-IDF document similarity (always), then optional AI
+		// re-ranking with the owner's own API key. Both fail open to the
+		// heuristic score.
+		$suggestions = $this->rescore_suggestions( $post, $suggestions );
+
 		// Sort by relevance
 		usort( $suggestions, fn( $a, $b ) => $b['relevance'] <=> $a['relevance'] );
 
@@ -244,6 +249,83 @@ class Analyzer {
 		}
 
 		return $total;
+	}
+
+	/**
+	 * Upgrade heuristic scores to TF-IDF similarity, then optionally to AI
+	 * relevance. Final relevance is 0-100. Any failure leaves the previous
+	 * score for that suggestion untouched.
+	 *
+	 * @param \WP_Post $post        Source post.
+	 * @param array    $suggestions Suggestions with heuristic 'relevance'.
+	 * @return array Suggestions with upgraded 'relevance'.
+	 */
+	private function rescore_suggestions( \WP_Post $post, array $suggestions ): array {
+		if ( array() === $suggestions ) {
+			return $suggestions;
+		}
+
+		$source_text = $post->post_title . ' ' . wp_strip_all_tags( $post->post_content );
+
+		// One text per suggestion, keyed by suggestion index.
+		$target_texts = array();
+		$target_cache = array();
+		foreach ( $suggestions as $i => $s ) {
+			$tid = (int) $s['target_post_id'];
+			if ( ! isset( $target_cache[ $tid ] ) ) {
+				$target               = get_post( $tid );
+				$target_cache[ $tid ] = $target
+					? $target->post_title . ' ' . wp_strip_all_tags( mb_substr( (string) $target->post_content, 0, 4000 ) )
+					: '';
+			}
+			$target_texts[ $i ] = $target_cache[ $tid ];
+		}
+
+		$cosines = Relevance::batch_scores( $source_text, $target_texts );
+		$max     = max( array_merge( array( 0.0 ), array_values( $cosines ) ) );
+
+		foreach ( $suggestions as $i => $s ) {
+			// Blend: mostly document similarity (relative to the best in this
+			// batch so scores are comparable), a little of the old heuristic.
+			$lexical = $max > 0 ? ( $cosines[ $i ] / $max ) : 0.0;
+			$legacy  = min( 1.0, (float) $s['relevance'] / 5.0 );
+
+			$suggestions[ $i ]['relevance'] = round( 100 * ( ( 0.7 * $lexical ) + ( 0.3 * $legacy ) ), 1 );
+		}
+
+		if ( AI_Ranker::enabled() ) {
+			// Send only the current front-runners — one API call per post.
+			$order = array_keys( $suggestions );
+			usort( $order, fn( $a, $b ) => $suggestions[ $b ]['relevance'] <=> $suggestions[ $a ]['relevance'] );
+			$top = array_slice( $order, 0, 12 );
+
+			$candidates = array();
+			foreach ( $top as $i ) {
+				$candidates[ $i ] = array(
+					'title'   => (string) $suggestions[ $i ]['target_title'],
+					'excerpt' => (string) $target_texts[ $i ],
+					'keyword' => (string) $suggestions[ $i ]['keyword'],
+				);
+			}
+
+			$scores = AI_Ranker::rank(
+				array(
+					'title' => $post->post_title,
+					'text'  => wp_strip_all_tags( $post->post_content ),
+				),
+				$candidates
+			);
+
+			if ( null !== $scores ) {
+				foreach ( $scores as $i => $score ) {
+					if ( isset( $suggestions[ $i ] ) ) {
+						$suggestions[ $i ]['relevance'] = (float) $score;
+					}
+				}
+			}
+		}
+
+		return $suggestions;
 	}
 
 	/**

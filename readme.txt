@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.0.2
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,7 @@ Dragon Internal Links helps you build a stronger internal link structure for bet
 
 * **Link Scanner** - Automatically scans all posts and pages for internal links
 * **Orphan Detection** - Find content with no internal links pointing to it
-* **Link Suggestions** - Get contextual suggestions for internal linking opportunities
+* **Smart Link Suggestions** - Contextual linking opportunities ranked by real document similarity (TF-IDF), with optional AI re-ranking using your own OpenAI, Anthropic, or Google key — stored encrypted, no extra account
 * **Link Health** - Detect broken internal links to deleted or draft posts
 * **Dashboard** - Visual overview of your site's internal link structure
 
@@ -57,6 +57,10 @@ Yes! Configure which post types to scan in Settings.
 4. Settings page
 
 == Changelog ==
+
+= 1.1.0 =
+* Smarter suggestions: relevance is now scored by document similarity (TF-IDF) instead of keyword overlap alone, so the best target ranks first.
+* Optional AI ranking: add your own OpenAI, Anthropic, or Google API key under Settings and suggestions are re-ranked for editorial relevance — one small request per post, key stored encrypted, no account with us needed.
 
 = 1.0.2 =
 * Fix: settings could be lost on a deactivate then reactivate update; the migration now carries each value before removing the old copy.
