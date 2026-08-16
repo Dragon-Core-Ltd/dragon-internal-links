@@ -93,9 +93,16 @@ class Admin {
 		}
 
 		wp_enqueue_style(
+			'dragon-internal-links-dragon-ui',
+			DRAGONINTERNALLINKS_PLUGIN_URL . 'admin/css/dragon-ui.css',
+			array(),
+			DRAGONINTERNALLINKS_VERSION
+		);
+
+		wp_enqueue_style(
 			'dil-admin',
 			DRAGONINTERNALLINKS_PLUGIN_URL . 'admin/css/admin.css',
-			array(),
+			array( 'dragon-internal-links-dragon-ui' ),
 			DRAGONINTERNALLINKS_VERSION
 		);
 

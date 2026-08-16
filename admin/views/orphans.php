@@ -11,8 +11,8 @@ defined( 'ABSPATH' ) || exit;
 
 // Template variables are provided by Admin::render_orphans_page().
 ?>
-<div class="wrap dil-orphans">
-	<h1 class="wp-heading-inline">
+<div class="wrap dragon-ui dil-orphans">
+	<h1 class="dragon-title wp-heading-inline"><span class="dragon-mark" aria-hidden="true"></span>
 		<?php esc_html_e( 'Dragon Internal Links', 'dragon-internal-links' ); ?>
 	</h1>
 

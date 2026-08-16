@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Yes! Configure which post types to scan in Settings.
 4. Settings page
 
 == Changelog ==
+
+= 1.1.1 =
+* New look: the Dragon design system arrives — a consistent Dragon Core header, cleaner tables, and unified status colours. Purely visual; no behaviour changes.
 
 = 1.1.0 =
 * Smarter suggestions: relevance is now scored by document similarity (TF-IDF) instead of keyword overlap alone, so the best target ranks first.
