@@ -15,3 +15,6 @@ Post types to scan, auto-scan on save, scan frequency, minimum keyword length, e
 
 ## Data & privacy
 The link index and suggestions live in your database. With AI ranking enabled, post titles/excerpts of candidate pages go to the provider you chose — and nowhere else. **Uninstall keeps your data by default.**
+
+## Uninstall
+Deleting the plugin keeps all its data by default, so a reinstall picks up where you left off. To remove everything on uninstall, tick **Delete all data on uninstall** in the plugin's settings first (this sets the `dragoninternallinks_delete_data_on_uninstall` option).
