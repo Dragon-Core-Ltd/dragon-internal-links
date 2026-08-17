@@ -255,6 +255,8 @@ class Admin {
 			}
 		}
 
+		update_option( 'dragoninternallinks_delete_data_on_uninstall', isset( $_POST['dragoninternallinks_delete_data'] ) );
+
 		add_settings_error( 'dragoninternallinks_settings', 'settings_saved', __( 'Settings saved.', 'dragon-internal-links' ), 'success' );
 	}
 

@@ -208,6 +208,15 @@ defined( 'ABSPATH' ) || exit;
 						</p>
 					</td>
 				</tr>
+							<tr>
+					<th scope="row"><?php esc_html_e( 'Delete all data on uninstall', 'dragon-internal-links' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" name="dragoninternallinks_delete_data" value="1" <?php checked( (bool) get_option( 'dragoninternallinks_delete_data_on_uninstall' ) ); ?>>
+							<?php esc_html_e( 'When the plugin is deleted, remove the link index, suggestions and settings. Leave off to keep them for a future reinstall.', 'dragon-internal-links' ); ?>
+						</label>
+					</td>
+				</tr>
 			</table>
 		</div>
 
