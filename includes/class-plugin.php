@@ -7,6 +7,8 @@
 
 namespace DragonInternalLinks;
 
+defined( 'ABSPATH' ) || exit;
+
 class Plugin {
 
 	/**

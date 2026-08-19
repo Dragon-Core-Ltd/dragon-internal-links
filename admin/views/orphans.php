@@ -42,7 +42,15 @@ defined( 'ABSPATH' ) || exit;
 			<span class="dil-count">(<?php echo count( $orphans ); ?>)</span>
 		</h2>
 
-		<?php if ( empty( $orphans ) ) : ?>
+		<?php if ( empty( $orphans ) && empty( $last_scan ) ) : ?>
+			<div class="dragon-card dragon-firstrun" style="max-width:640px;">
+				<h3 style="margin-top:0;"><?php esc_html_e( 'No scan yet', 'dragon-internal-links' ); ?></h3>
+				<p><?php esc_html_e( 'Orphan detection needs a first scan of your content. Run one from the Dashboard tab — on most sites it takes under a minute.', 'dragon-internal-links' ); ?></p>
+				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'tools.php?page=dragon-internal-links' ) ); ?>">
+					<?php esc_html_e( 'Go to Dashboard', 'dragon-internal-links' ); ?>
+				</a>
+			</div>
+		<?php elseif ( empty( $orphans ) ) : ?>
 			<p class="dil-success">
 				<span class="dashicons dashicons-yes-alt"></span>
 				<?php esc_html_e( 'Great! All your posts have at least one internal link pointing to them.', 'dragon-internal-links' ); ?>
@@ -51,12 +59,12 @@ defined( 'ABSPATH' ) || exit;
 			<table class="dil-table widefat">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Type', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Published', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Outbound Links', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Priority', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Actions', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Type', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Published', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Outbound Links', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Priority', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Actions', 'dragon-internal-links' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -107,7 +115,9 @@ defined( 'ABSPATH' ) || exit;
 			<?php esc_html_e( 'These posts have 2 or fewer outbound internal links. Consider adding more to improve site structure.', 'dragon-internal-links' ); ?>
 		</p>
 
-		<?php if ( empty( $low_outbound ) ) : ?>
+		<?php if ( empty( $low_outbound ) && empty( $last_scan ) ) : ?>
+			<p class="dil-muted"><?php esc_html_e( 'Run a scan first to see outbound link coverage.', 'dragon-internal-links' ); ?></p>
+		<?php elseif ( empty( $low_outbound ) ) : ?>
 			<p class="dil-success">
 				<span class="dashicons dashicons-yes-alt"></span>
 				<?php esc_html_e( 'All posts have good outbound link coverage.', 'dragon-internal-links' ); ?>
@@ -116,10 +126,10 @@ defined( 'ABSPATH' ) || exit;
 			<table class="dil-table widefat">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Outbound Links', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Inbound Links', 'dragon-internal-links' ); ?></th>
-						<th><?php esc_html_e( 'Actions', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Outbound Links', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Inbound Links', 'dragon-internal-links' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Actions', 'dragon-internal-links' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>

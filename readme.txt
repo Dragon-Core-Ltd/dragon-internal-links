@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,36 @@ Dragon Internal Links helps you build a stronger internal link structure for bet
 * Keep visitors engaged longer
 * Improve site navigation
 
+== External services ==
+
+This plugin works entirely on your own site by default. Link suggestions are
+ranked locally, and no data leaves your server.
+
+AI re-ranking is an optional feature that is off until you enable it and enter
+your own API key. When it is on, the plugin asks a third-party AI provider to
+score the link candidates it has already found locally. This happens while
+suggestions are being generated for a post.
+
+Each request contains the source post's title and an extract of its text
+(shortened to roughly 1,500 characters), plus the title, excerpt (roughly 240
+characters) and proposed anchor text of each candidate page, along with the
+model you selected and your API key (Google receives the key as a URL parameter,
+per its API design). Full post content is never sent, no user data is sent, and nothing is sent
+to Dragon Core. If the provider is unreachable the plugin falls back to its local
+ranking.
+
+You choose one provider, and only that provider is contacted:
+
+* **OpenAI** — Terms: https://openai.com/policies/terms-of-use/ ·
+  Privacy: https://openai.com/policies/privacy-policy/
+* **Anthropic Claude** — Terms: https://www.anthropic.com/legal/consumer-terms ·
+  Privacy: https://www.anthropic.com/legal/privacy
+* **Google Gemini** — Terms: https://policies.google.com/terms ·
+  Privacy: https://policies.google.com/privacy
+
+Your provider may charge for these requests and applies its own data-retention
+policy. Review the terms above before enabling the feature.
+
 == Installation ==
 
 1. Upload the plugin files to `/wp-content/plugins/dragon-internal-links/`
@@ -49,14 +79,12 @@ No. Scanning happens in the background and link data is cached. The plugin adds 
 
 Yes! Configure which post types to scan in Settings.
 
-== Screenshots ==
-
-1. Dashboard showing link statistics
-2. Orphan content detection
-3. Link suggestions with one-click insertion
-4. Settings page
-
 == Changelog ==
+
+= 1.1.3 =
+* Documentation: full external-services disclosure for optional AI re-ranking.
+* Fix: a never-scanned site no longer shows "all posts have links" — it now prompts the first scan.
+* Reliability: scheduled scans on large sites now continue across cron runs instead of timing out.
 
 = 1.1.2 =
 * Data safety: uninstalling the plugin no longer deletes its data unless you explicitly opt in first — a reinstall now picks up exactly where you left off. (New setting.)

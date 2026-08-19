@@ -9,6 +9,8 @@
 
 namespace DragonInternalLinks;
 
+defined( 'ABSPATH' ) || exit;
+
 class Scheduler {
 
 	/**
@@ -53,12 +55,25 @@ class Scheduler {
 
 		$start = microtime( true );
 
-		// Scan all posts
-		$result = $this->scanner->scan_all( 100, 0 );
+		// Scan in batches inside a time box. A large site cannot finish inside
+		// one cron request without hitting the PHP time limit — an unfinished
+		// scan reschedules itself a minute out and continues from its offset.
+		$offset   = (int) get_option( 'dragoninternallinks_scan_offset', 0 );
+		$deadline = time() + 2 * MINUTE_IN_SECONDS;
 
-		while ( ! $result['complete'] ) {
+		$result = $this->scanner->scan_all( 100, $offset );
+
+		while ( ! $result['complete'] && time() < $deadline ) {
 			$result = $this->scanner->scan_all( 100, $result['offset'] );
 		}
+
+		if ( ! $result['complete'] ) {
+			update_option( 'dragoninternallinks_scan_offset', (int) $result['offset'], false );
+			wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::CRON_HOOK );
+			return;
+		}
+
+		delete_option( 'dragoninternallinks_scan_offset' );
 
 		// Generate suggestions
 		$suggestions = $this->analyzer->generate_all_suggestions( 50 );

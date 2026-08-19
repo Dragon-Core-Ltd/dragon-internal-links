@@ -9,6 +9,8 @@
 
 namespace DragonInternalLinks;
 
+defined( 'ABSPATH' ) || exit;
+
 class Admin {
 
 	/**
@@ -151,6 +153,7 @@ class Admin {
 		$orphans      = $this->analyzer->get_orphan_posts( 100 );
 		$low_outbound = $this->analyzer->get_low_outbound_posts( 50 );
 		$current_tab  = 'orphans';
+		$last_scan    = (int) get_option( 'dragoninternallinks_last_scan', 0 );
 
 		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/orphans.php';
 	}

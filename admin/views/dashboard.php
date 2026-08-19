@@ -121,9 +121,9 @@ defined( 'ABSPATH' ) || exit;
 					<table class="dil-table">
 						<thead>
 							<tr>
-								<th><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
-								<th><?php esc_html_e( 'Inbound', 'dragon-internal-links' ); ?></th>
-								<th><?php esc_html_e( 'Outbound', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Post', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Inbound', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Outbound', 'dragon-internal-links' ); ?></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -158,9 +158,9 @@ defined( 'ABSPATH' ) || exit;
 					<table class="dil-table">
 						<thead>
 							<tr>
-								<th><?php esc_html_e( 'Source', 'dragon-internal-links' ); ?></th>
-								<th><?php esc_html_e( 'Broken Link', 'dragon-internal-links' ); ?></th>
-								<th><?php esc_html_e( 'Status', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Source', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Broken Link', 'dragon-internal-links' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Status', 'dragon-internal-links' ); ?></th>
 							</tr>
 						</thead>
 						<tbody>
