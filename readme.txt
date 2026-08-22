@@ -1,10 +1,10 @@
 === Dragon Internal Links ===
-Contributors: dragoncore
+Contributors: dragoncoreltd
 Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,11 @@ No. Scanning happens in the background and link data is cached. The plugin adds 
 Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
+
+= 1.1.4 =
+* Compatibility: tested up to WordPress 7.1.
+* Fix: the first-run guidance panel now shows its intended styling.
+* Housekeeping: corrected the contributor name in the plugin readme.
 
 = 1.1.3 =
 * Documentation: full external-services disclosure for optional AI re-ranking.
