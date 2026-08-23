@@ -125,13 +125,55 @@ final class AI_Ranker {
 	}
 
 	/**
+	 * Accepted model-name prefixes per provider, so a stored model can only ever
+	 * route the API key to a model in the selected provider's own family.
+	 */
+	private const MODEL_PREFIXES = array(
+		'openai'    => array( 'gpt-', 'o1', 'o3', 'o4', 'chatgpt-' ),
+		'anthropic' => array( 'claude-' ),
+		'google'    => array( 'gemini-', 'gemma-' ),
+	);
+
+	/**
 	 * Model from settings, falling back to the provider default.
+	 *
+	 * The stored value is validated against a character allowlist (which also
+	 * protects the Google model path interpolation) and the provider's model
+	 * family, so a crafted option can't route the key to an unexpected model.
 	 *
 	 * @return string
 	 */
 	public static function model(): string {
-		$model = trim( (string) get_option( 'dragoninternallinks_ai_model', '' ) );
-		return '' !== $model ? $model : ( self::DEFAULT_MODELS[ self::provider() ] ?? 'gpt-4o-mini' );
+		$provider = self::provider();
+		$default  = self::DEFAULT_MODELS[ $provider ] ?? 'gpt-4o-mini';
+		$model    = trim( (string) get_option( 'dragoninternallinks_ai_model', '' ) );
+
+		if ( '' === $model || ! self::is_allowed_model( $provider, $model ) ) {
+			return $default;
+		}
+
+		return $model;
+	}
+
+	/**
+	 * Whether a model name is acceptable for a provider.
+	 *
+	 * @param string $provider Provider slug.
+	 * @param string $model    Model name.
+	 * @return bool
+	 */
+	private static function is_allowed_model( string $provider, string $model ): bool {
+		if ( ! preg_match( '/^[a-zA-Z0-9.\-:]+$/', $model ) ) {
+			return false;
+		}
+
+		foreach ( self::MODEL_PREFIXES[ $provider ] ?? array() as $prefix ) {
+			if ( str_starts_with( strtolower( $model ), $prefix ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

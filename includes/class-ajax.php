@@ -189,6 +189,13 @@ class Ajax {
 			wp_send_json_error( array( 'message' => __( 'Post not found.', 'dragon-internal-links' ) ) );
 		}
 
+		// Applying a suggestion edits the source post's content, so require edit
+		// rights on that specific post — manage_options alone must not let a role
+		// without edit access mutate arbitrary posts.
+		if ( ! current_user_can( 'edit_post', (int) $post->ID ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
+		}
+
 		// Build the link HTML
 		$link_html = sprintf(
 			'<a href="%s">%s</a>',
