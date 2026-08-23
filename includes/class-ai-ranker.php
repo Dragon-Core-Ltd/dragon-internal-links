@@ -186,26 +186,18 @@ final class AI_Ranker {
 		if ( '' === $stored ) {
 			return '';
 		}
-		$data = base64_decode( $stored, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- Decoding the AES-256-CBC encrypted API key from storage.
-		if ( false === $data || strlen( $data ) < 17 ) {
-			return '';
-		}
-		$key       = hash( 'sha256', wp_salt( 'auth' ), true );
-		$decrypted = openssl_decrypt( substr( $data, 16 ), 'AES-256-CBC', $key, OPENSSL_RAW_DATA, substr( $data, 0, 16 ) );
-		return false !== $decrypted ? $decrypted : '';
+		$decrypted = Crypto::decrypt( $stored );
+		return null !== $decrypted ? $decrypted : '';
 	}
 
 	/**
 	 * Encrypt an API key for storage.
 	 *
 	 * @param string $plain Plain key.
-	 * @return string base64(iv + ciphertext).
+	 * @return string Prefixed base64 of the authenticated ciphertext.
 	 */
 	public static function encrypt_key( string $plain ): string {
-		$key = hash( 'sha256', wp_salt( 'auth' ), true );
-		$iv  = openssl_random_pseudo_bytes( 16 );
-		$enc = openssl_encrypt( $plain, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv );
-		return base64_encode( $iv . $enc ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Encoding an AES-256-CBC encrypted API key for storage.
+		return Crypto::encrypt( $plain );
 	}
 
 	/**

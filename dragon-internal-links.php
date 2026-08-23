@@ -29,6 +29,7 @@ define( 'DRAGONINTERNALLINKS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DRAGONINTERNALLINKS_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
 // Load plugin classes
+require_once DRAGONINTERNALLINKS_PLUGIN_DIR . 'includes/class-crypto.php';
 require_once DRAGONINTERNALLINKS_PLUGIN_DIR . 'includes/class-plugin.php';
 require_once DRAGONINTERNALLINKS_PLUGIN_DIR . 'includes/class-admin.php';
 require_once DRAGONINTERNALLINKS_PLUGIN_DIR . 'includes/class-scanner.php';
