@@ -214,43 +214,61 @@ class Analyzer {
 	}
 
 	/**
-	 * Generate suggestions for all posts
+	 * Generate suggestions for a batch of posts (resumable).
 	 *
-	 * @param int $batch_size Posts per batch
-	 * @return int Number of suggestions generated
+	 * Processes one offset-based page so every post is eventually covered, not
+	 * just the newest batch. Stale pending suggestions are cleared once, at the
+	 * start of a pass (offset 0), so a mid-pass call never destroys the results
+	 * earlier batches produced. Ordering is by ID (stable across a pass, unlike
+	 * "modified" which shifts as posts are edited).
+	 *
+	 * @param int $batch_size Posts per batch.
+	 * @param int $offset     Post offset to start from.
+	 * @return array{generated:int,offset:int,total:int,done:bool}
 	 */
-	public function generate_all_suggestions( int $batch_size = 20 ): int {
+	public function generate_all_suggestions( int $batch_size = 20, int $offset = 0 ): array {
 		global $wpdb;
 
-		// Clear old pending suggestions
-		$table = $wpdb->prefix . 'dil_suggestions';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
-		$wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
+		if ( 0 === $offset ) {
+			// Fresh pass: clear old pending suggestions once.
+			$table = $wpdb->prefix . 'dil_suggestions';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+			$wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
+		}
 
 		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 
-		$posts = get_posts(
+		$query = new \WP_Query(
 			array(
 				'post_type'      => $post_types,
 				'post_status'    => 'publish',
 				'posts_per_page' => $batch_size,
-				'orderby'        => 'modified',
-				'order'          => 'DESC',
+				'offset'         => $offset,
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
+				'fields'         => 'ids',
 			)
 		);
 
-		$total = 0;
+		$ids       = array_map( 'intval', $query->posts );
+		$total     = (int) $query->found_posts;
+		$generated = 0;
 
-		foreach ( $posts as $post ) {
-			$suggestions = $this->generate_suggestions_for_post( $post->ID );
-
-			foreach ( $suggestions as $suggestion ) {
+		foreach ( $ids as $post_id ) {
+			foreach ( $this->generate_suggestions_for_post( $post_id ) as $suggestion ) {
 				$this->store_suggestion( $suggestion );
-				++$total;
+				++$generated;
 			}
 		}
 
-		return $total;
+		$next = $offset + count( $ids );
+
+		return array(
+			'generated' => $generated,
+			'offset'    => $next,
+			'total'     => $total,
+			'done'      => array() === $ids || $next >= $total,
+		);
 	}
 
 	/**

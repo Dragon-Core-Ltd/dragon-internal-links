@@ -117,13 +117,22 @@ class Ajax {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
 		}
 
-		$count = $this->analyzer->generate_all_suggestions( 30 );
+		$batch_size = 20;
+		$offset     = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
+
+		$result = $this->analyzer->generate_all_suggestions( $batch_size, $offset );
 
 		wp_send_json_success(
 			array(
-				'generated' => $count,
-				/* translators: %d: number of link suggestions generated. */
-				'message'   => sprintf( __( 'Generated %d link suggestions.', 'dragon-internal-links' ), $count ),
+				'generated' => $result['generated'],
+				'offset'    => $result['offset'],
+				'total'     => $result['total'],
+				'done'      => $result['done'],
+				'message'   => $result['done']
+					/* translators: %d: total posts analyzed for link suggestions. */
+					? sprintf( __( 'Done — analyzed %d posts for link suggestions.', 'dragon-internal-links' ), $result['total'] )
+					/* translators: 1: posts processed so far, 2: total posts. */
+					: sprintf( __( 'Generating... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] ),
 			)
 		);
 	}

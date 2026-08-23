@@ -53,40 +53,62 @@ class Scheduler {
 			error_log( 'DIL: Starting scheduled scan at ' . current_time( 'mysql' ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug logging, only when WP_DEBUG is enabled.
 		}
 
-		$start = microtime( true );
-
-		// Scan in batches inside a time box. A large site cannot finish inside
-		// one cron request without hitting the PHP time limit — an unfinished
-		// scan reschedules itself a minute out and continues from its offset.
-		$offset   = (int) get_option( 'dragoninternallinks_scan_offset', 0 );
+		$start    = microtime( true );
 		$deadline = time() + 2 * MINUTE_IN_SECONDS;
 
-		$result = $this->scanner->scan_all( 100, $offset );
+		// Phase 1 — scan, in batches inside a time box. A large site cannot finish
+		// inside one cron request without hitting the PHP time limit; an unfinished
+		// scan reschedules itself a minute out and continues from its offset. Once
+		// generation has started (generate_offset set), this phase is skipped so a
+		// reschedule resumes generation rather than restarting the scan.
+		if ( false === get_option( 'dragoninternallinks_generate_offset', false ) ) {
+			$offset = (int) get_option( 'dragoninternallinks_scan_offset', 0 );
+			$result = $this->scanner->scan_all( 100, $offset );
 
-		while ( ! $result['complete'] && time() < $deadline ) {
-			$result = $this->scanner->scan_all( 100, $result['offset'] );
+			while ( ! $result['complete'] && time() < $deadline ) {
+				$result = $this->scanner->scan_all( 100, $result['offset'] );
+			}
+
+			if ( ! $result['complete'] ) {
+				update_option( 'dragoninternallinks_scan_offset', (int) $result['offset'], false );
+				wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::CRON_HOOK );
+				return;
+			}
+
+			delete_option( 'dragoninternallinks_scan_offset' );
+			update_option( 'dragoninternallinks_scan_total', (int) $result['total'], false );
+			update_option( 'dragoninternallinks_generate_offset', 0, false );
 		}
 
-		if ( ! $result['complete'] ) {
-			update_option( 'dragoninternallinks_scan_offset', (int) $result['offset'], false );
+		// Phase 2 — generate suggestions for EVERY post, resumable + time-boxed so
+		// a large site (especially with AI re-ranking) never overruns one run.
+		// Pending suggestions are cleared once, when generation starts at offset 0.
+		$gen_offset = (int) get_option( 'dragoninternallinks_generate_offset', 0 );
+		do {
+			$gen        = $this->analyzer->generate_all_suggestions( 50, $gen_offset );
+			$gen_offset = (int) $gen['offset'];
+		} while ( ! $gen['done'] && time() < $deadline );
+
+		if ( ! $gen['done'] ) {
+			update_option( 'dragoninternallinks_generate_offset', $gen_offset, false );
 			wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::CRON_HOOK );
 			return;
 		}
 
-		delete_option( 'dragoninternallinks_scan_offset' );
+		delete_option( 'dragoninternallinks_generate_offset' );
 
-		// Generate suggestions
-		$suggestions = $this->analyzer->generate_all_suggestions( 50 );
-
+		$total    = (int) get_option( 'dragoninternallinks_scan_total', 0 );
 		$duration = round( microtime( true ) - $start, 2 );
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( "DIL: Scan complete. Scanned {$result['total']} posts, generated {$suggestions} suggestions in {$duration}s" ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug logging, only when WP_DEBUG is enabled.
+			error_log( "DIL: Scheduled scan + generation complete for {$total} posts in {$duration}s" ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Debug logging, only when WP_DEBUG is enabled.
 		}
+
+		delete_option( 'dragoninternallinks_scan_total' );
 
 		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local timestamp is intentional; displayed via date_i18n().
 		update_option( 'dragoninternallinks_last_scan', current_time( 'timestamp' ) );
-		update_option( 'dragoninternallinks_last_scan_count', $result['total'] );
+		update_option( 'dragoninternallinks_last_scan_count', $total );
 	}
 
 	/**

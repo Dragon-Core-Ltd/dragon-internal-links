@@ -61,7 +61,7 @@
         scanBatch(0);
     });
 
-    // Generate Suggestions
+    // Generate Suggestions (resumable: loops through every post, not just a batch)
     $('#dil-generate-suggestions').on('click', function() {
         const $btn = $(this);
         const $status = $('#dil-scan-status');
@@ -69,31 +69,40 @@
         $btn.prop('disabled', true);
         $status.text(dilAdmin.i18n.generating);
 
-        $.ajax({
-            url: dilAdmin.ajaxUrl,
-            type: 'POST',
-            data: {
-                action: 'dragoninternallinks_generate_suggestions',
-                nonce: dilAdmin.nonce
-            },
-            success: function(response) {
-                $btn.prop('disabled', false);
-
-                if (response.success) {
-                    $status.text(response.data.message);
-
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1500);
-                } else {
+        function generateBatch(offset) {
+            $.ajax({
+                url: dilAdmin.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'dragoninternallinks_generate_suggestions',
+                    nonce: dilAdmin.nonce,
+                    offset: offset
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var data = response.data;
+                        $status.text(data.message);
+                        if (data.done) {
+                            $btn.prop('disabled', false);
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1500);
+                        } else {
+                            generateBatch(data.offset);
+                        }
+                    } else {
+                        $btn.prop('disabled', false);
+                        $status.text(dilAdmin.i18n.error);
+                    }
+                },
+                error: function() {
+                    $btn.prop('disabled', false);
                     $status.text(dilAdmin.i18n.error);
                 }
-            },
-            error: function() {
-                $btn.prop('disabled', false);
-                $status.text(dilAdmin.i18n.error);
-            }
-        });
+            });
+        }
+
+        generateBatch(0);
     });
 
     // Apply Suggestion
