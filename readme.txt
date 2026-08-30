@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,9 +42,9 @@ suggestions are being generated for a post.
 Each request contains the source post's title and an extract of its text
 (shortened to roughly 1,500 characters), plus the title, excerpt (roughly 240
 characters) and proposed anchor text of each candidate page, along with the
-model you selected and your API key (Google receives the key as a URL parameter,
-per its API design). Full post content is never sent, no user data is sent, and nothing is sent
-to Dragon Core. If the provider is unreachable the plugin falls back to its local
+model you selected and your API key (sent in a request header for every
+provider, never in the URL). Full post content is never sent, no user data is
+sent, and nothing is sent to Dragon Core. If the provider is unreachable the plugin falls back to its local
 ranking.
 
 You choose one provider, and only that provider is contacted:
@@ -80,6 +80,14 @@ No. Scanning happens in the background and link data is cached. The plugin adds 
 Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
+
+= 1.1.6 =
+* Readme: corrected the AI re-ranking disclosure (the Google API key is sent in a request header, not in the URL) and added the missing 1.1.5 changelog entry. No functional change.
+
+= 1.1.5 =
+* Improvement: generating suggestions now pages through all posts and no longer wipes previous results mid-run.
+* Security: applying a suggestion now requires edit rights on the post; the AI model setting is constrained to the selected provider.
+* Hardening: the BYO AI key uses authenticated encryption at rest.
 
 = 1.1.4 =
 * Compatibility: tested up to WordPress 7.1.
