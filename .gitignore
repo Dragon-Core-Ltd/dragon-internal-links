@@ -19,8 +19,7 @@ Thumbs.db
 .wp-env.override.json
 
 # Testing
-phpunit.xml
-tests/
+.phpunit.result.cache
 coverage/
 
 # Dev config

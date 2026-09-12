@@ -19,6 +19,13 @@ class Scanner {
 	private string $site_url;
 
 	/**
+	 * Whether the last scan_post() could not replace the post's index.
+	 *
+	 * @var bool
+	 */
+	private bool $scan_failed = false;
+
+	/**
 	 * Constructor
 	 */
 	public function __construct() {
@@ -54,15 +61,40 @@ class Scanner {
 			return array();
 		}
 
-		// Clear existing links for this post
-		$this->clear_post_links( $post_id );
+		global $wpdb;
 
-		// Extract links from content
-		$links = $this->extract_links( $post->post_content );
+		$this->scan_failed = false;
 
-		// Store links in database
+		/*
+		 * Extract before touching the database. The old rows used to be deleted
+		 * first, so anything that went wrong afterwards left the post with no
+		 * index at all while the scan still reported the links it had found.
+		 */
+		$links = $this->extract_links( $post->post_content, (string) get_permalink( $post ) );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction control around this plugin's own writes.
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			$this->scan_failed = true;
+			return $links;
+		}
+
+		$replaced = $this->clear_post_links( $post_id );
+
 		foreach ( $links as $link ) {
-			$this->store_link( $post_id, $link );
+			if ( ! $replaced ) {
+				break;
+			}
+			$replaced = $this->store_link( $post_id, $link );
+		}
+
+		if ( ! $replaced || false === $wpdb->query( 'COMMIT' ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$this->scan_failed = true;
+
+			// Stats describe the index, so they are not updated over a replacement
+			// that did not land.
+			return $links;
 		}
 
 		// Update stats
@@ -72,16 +104,31 @@ class Scanner {
 	}
 
 	/**
+	 * Whether the last scan_post() failed to replace the post's index.
+	 *
+	 * The links found are still returned, so a caller that only counted them
+	 * would report a successful scan over an index that was never written.
+	 *
+	 * @return bool
+	 */
+	public function scan_failed(): bool {
+		return $this->scan_failed;
+	}
+
+	/**
 	 * Extract internal links from HTML content
 	 *
-	 * @param string $content HTML content
+	 * @param string $content  HTML content
+	 * @param string $base_url URL of the page the content belongs to; relative
+	 *                         hrefs are resolved against it. Defaults to the home URL.
 	 * @return array Array of link data
 	 */
-	public function extract_links( string $content ): array {
+	public function extract_links( string $content, string $base_url = '' ): array {
 		if ( empty( $content ) ) {
 			return array();
 		}
 
+		$base  = '' !== $base_url ? $base_url : $this->site_url;
 		$links = array();
 
 		// Use DOMDocument for proper HTML parsing
@@ -104,13 +151,15 @@ class Scanner {
 				continue;
 			}
 
-			// Check if internal link
-			if ( ! $this->is_internal_link( $href ) ) {
+			// Resolve against the containing page, then check it is on this site
+			$absolute = $this->resolve_url( $href, $base );
+
+			if ( null === $absolute || ! $this->is_internal_link( $absolute ) ) {
 				continue;
 			}
 
 			// Resolve to post ID
-			$target_post_id = $this->url_to_post_id( $href );
+			$target_post_id = $this->url_to_post_id( $absolute );
 
 			if ( ! $target_post_id ) {
 				continue;
@@ -134,27 +183,175 @@ class Scanner {
 	}
 
 	/**
-	 * Check if URL is internal
+	 * Check if URL is internal (on this site's host).
+	 *
+	 * Relative URLs are resolved against the home URL first. Hosts are
+	 * compared case-insensitively and a leading "www." is ignored on either
+	 * side, as url_to_postid() does.
 	 *
 	 * @param string $url URL to check
 	 * @return bool
 	 */
 	public function is_internal_link( string $url ): bool {
-		// Skip anchors, mailto, tel, etc.
-		if ( preg_match( '/^(#|mailto:|tel:|javascript:)/i', $url ) ) {
+		$absolute = $this->resolve_url( $url, $this->site_url );
+
+		if ( null === $absolute ) {
 			return false;
 		}
 
-		// Relative URLs are internal
-		if ( strpos( $url, '/' ) === 0 && strpos( $url, '//' ) !== 0 ) {
-			return true;
+		return self::comparable_host( $absolute ) === self::comparable_host( $this->site_url );
+	}
+
+	/**
+	 * Resolve an href to an absolute http(s) URL (RFC 3986 section 5.2).
+	 *
+	 * Root-relative hrefs resolve against the scheme and host of the base
+	 * only (never its path, so a subdirectory install does not double the
+	 * directory), scheme-relative hrefs take the base scheme, and
+	 * document-relative and query-only hrefs resolve against the base path.
+	 * Scheme and host are lowercased, dot segments are removed and the
+	 * fragment is dropped.
+	 *
+	 * @param string $href Href as written in the content.
+	 * @param string $base Absolute URL of the containing page.
+	 * @return string|null Absolute URL, or null for an empty, fragment-only or
+	 *                     non-http(s) href (mailto:, tel:, javascript:, ...).
+	 */
+	public function resolve_url( string $href, string $base ): ?string {
+		$href = trim( $href );
+
+		if ( '' === $href || str_starts_with( $href, '#' ) ) {
+			return null;
 		}
 
-		// Check if URL starts with site URL
-		$site_host = wp_parse_url( $this->site_url, PHP_URL_HOST );
-		$link_host = wp_parse_url( $url, PHP_URL_HOST );
+		// A scheme (RFC 3986 section 3.1) makes the href absolute. Detected by
+		// grammar rather than parse_url(), which reads "tel:123" as host:port.
+		if ( preg_match( '#^([a-zA-Z][a-zA-Z0-9+.-]*):#', $href, $m ) ) {
+			return in_array( strtolower( $m[1] ), array( 'http', 'https' ), true ) ? self::normalize_absolute( $href ) : null;
+		}
 
-		return $link_host === $site_host;
+		$base_parts = wp_parse_url( $base );
+		if ( ! is_array( $base_parts ) || empty( $base_parts['host'] ) ) {
+			return null;
+		}
+
+		$base_scheme = strtolower( (string) ( $base_parts['scheme'] ?? 'https' ) );
+
+		if ( str_starts_with( $href, '//' ) ) {
+			return self::normalize_absolute( $base_scheme . ':' . $href );
+		}
+
+		$ref = wp_parse_url( $href );
+		if ( ! is_array( $ref ) ) {
+			$ref = array( 'path' => $href );
+		}
+
+		$base_path = (string) ( $base_parts['path'] ?? '' );
+		if ( '' === $base_path ) {
+			$base_path = '/';
+		}
+
+		$ref_path = (string) ( $ref['path'] ?? '' );
+		if ( '' === $ref_path ) {
+			// Query-only reference: keep the base path.
+			$path  = $base_path;
+			$query = $ref['query'] ?? $base_parts['query'] ?? null;
+		} elseif ( str_starts_with( $ref_path, '/' ) ) {
+			$path  = $ref_path;
+			$query = $ref['query'] ?? null;
+		} else {
+			$path  = substr( $base_path, 0, strrpos( $base_path, '/' ) + 1 ) . $ref_path;
+			$query = $ref['query'] ?? null;
+		}
+
+		return self::build_url( $base_scheme, $base_parts['host'], $base_parts['port'] ?? null, $path, $query );
+	}
+
+	/**
+	 * Normalize an absolute URL: lowercase scheme and host, remove dot
+	 * segments, drop the fragment. Non-http(s) URLs resolve to null.
+	 *
+	 * @param string $url Absolute URL.
+	 * @return string|null
+	 */
+	private static function normalize_absolute( string $url ): ?string {
+		$parts = wp_parse_url( $url );
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+			return null;
+		}
+
+		$scheme = strtolower( (string) ( $parts['scheme'] ?? '' ) );
+		if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+			return null;
+		}
+
+		$path = (string) ( $parts['path'] ?? '' );
+		if ( '' === $path ) {
+			$path = '/';
+		}
+
+		return self::build_url( $scheme, $parts['host'], $parts['port'] ?? null, $path, $parts['query'] ?? null );
+	}
+
+	/**
+	 * Assemble an absolute URL from its parts.
+	 *
+	 * @param string      $scheme Scheme (already lowercased).
+	 * @param string      $host   Host.
+	 * @param int|null    $port   Port, if any.
+	 * @param string      $path   Path (may contain dot segments).
+	 * @param string|null $query  Query string without "?", if any.
+	 * @return string
+	 */
+	private static function build_url( string $scheme, string $host, ?int $port, string $path, ?string $query ): string {
+		return $scheme . '://' . strtolower( $host ) . ( null !== $port ? ':' . $port : '' )
+			. self::remove_dot_segments( $path )
+			. ( null !== $query ? '?' . $query : '' );
+	}
+
+	/**
+	 * Collapse "." and ".." segments in an absolute path (RFC 3986 section 5.2.4).
+	 * ".." never climbs above the root.
+	 *
+	 * @param string $path Path starting with "/".
+	 * @return string
+	 */
+	private static function remove_dot_segments( string $path ): string {
+		$segments = explode( '/', $path );
+		$out      = array();
+		foreach ( $segments as $segment ) {
+			if ( '.' === $segment ) {
+				continue;
+			}
+			if ( '..' === $segment ) {
+				if ( count( $out ) > 1 ) {
+					array_pop( $out );
+				}
+				continue;
+			}
+			$out[] = $segment;
+		}
+		$last = end( $segments );
+		if ( '.' === $last || '..' === $last ) {
+			$out[] = '';
+		}
+		if ( ! isset( $out[0] ) || '' !== $out[0] ) {
+			array_unshift( $out, '' );
+		}
+		return implode( '/', $out );
+	}
+
+	/**
+	 * Host of a URL in comparable form: lowercased, leading "www." removed.
+	 *
+	 * @param string $url Absolute URL.
+	 * @return string
+	 */
+	private static function comparable_host( string $url ): string {
+		$host = wp_parse_url( $url, PHP_URL_HOST );
+		$host = is_string( $host ) ? strtolower( $host ) : '';
+
+		return (string) preg_replace( '/^www\./', '', $host );
 	}
 
 	/**
@@ -164,10 +361,15 @@ class Scanner {
 	 * @return int|null Post ID or null
 	 */
 	public function url_to_post_id( string $url ): ?int {
-		// Make absolute if relative
-		if ( strpos( $url, '/' ) === 0 ) {
-			$url = $this->site_url . $url;
-		}
+		// Make absolute if relative (against the home URL's scheme and host)
+		$url = $this->resolve_url( $url, $this->site_url ) ?? $url;
+
+		// Resolution lowercases the host so hosts compare correctly, but
+		// url_to_postid() compares the URL's host against the configured one
+		// case-sensitively and returns 0 when they differ. A site configured with
+		// a mixed-case host would find none of its own links, so the configured
+		// spelling goes back in before the lookup. Path and query keep their case.
+		$url = $this->with_site_host( $url );
 
 		$post_id = url_to_postid( $url );
 
@@ -179,6 +381,41 @@ class Scanner {
 		$attachment_id = attachment_url_to_postid( $url );
 
 		return $attachment_id > 0 ? $attachment_id : null;
+	}
+
+	/**
+	 * The same URL with the site's own host spelling, when it is this site's host.
+	 *
+	 * @param string $url Absolute URL.
+	 * @return string
+	 */
+	private function with_site_host( string $url ): string {
+		$host = wp_parse_url( $url, PHP_URL_HOST );
+		if ( ! is_string( $host ) || '' === $host ) {
+			return $url;
+		}
+
+		if ( self::comparable_host( $url ) !== self::comparable_host( $this->site_url ) ) {
+			return $url;
+		}
+
+		$site_host = wp_parse_url( $this->site_url, PHP_URL_HOST );
+		if ( ! is_string( $site_host ) || '' === $site_host || $site_host === $host ) {
+			return $url;
+		}
+
+		// Only the host is replaced, and only where it sits in the authority.
+		$at = strpos( $url, '://' );
+		if ( false === $at ) {
+			return $url;
+		}
+		$start = $at + 3;
+
+		if ( 0 !== substr_compare( $url, $host, $start, strlen( $host ) ) ) {
+			return $url;
+		}
+
+		return substr_replace( $url, $site_host, $start, strlen( $host ) );
 	}
 
 	/**
@@ -213,13 +450,13 @@ class Scanner {
 	 * @param int   $source_post_id Source post ID
 	 * @param array $link           Link data
 	 */
-	private function store_link( int $source_post_id, array $link ): void {
+	private function store_link( int $source_post_id, array $link ): bool {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'dil_links';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom plugin table; no core API available.
-		$wpdb->insert(
+		return false !== $wpdb->insert(
 			$table,
 			array(
 				'source_post_id' => $source_post_id,
@@ -237,13 +474,13 @@ class Scanner {
 	 *
 	 * @param int $post_id Post ID
 	 */
-	public function clear_post_links( int $post_id ): void {
+	public function clear_post_links( int $post_id ): bool {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'dil_links';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
-		$wpdb->delete(
+		return false !== $wpdb->delete(
 			$table,
 			array( 'source_post_id' => $post_id ),
 			array( '%d' )
@@ -365,9 +602,16 @@ class Scanner {
 		$total    = $query->found_posts;
 
 		$scanned = 0;
+		$failed  = 0;
 		foreach ( $post_ids as $post_id ) {
 			$this->scan_post( $post_id );
 			++$scanned;
+
+			// A post whose index could not be replaced is counted, so the run is
+			// not presented as a complete rebuild.
+			if ( $this->scan_failed() ) {
+				++$failed;
+			}
 		}
 
 		// Update stats for all affected posts
@@ -375,6 +619,7 @@ class Scanner {
 
 		return array(
 			'scanned'  => $scanned,
+			'failed'   => $failed,
 			'total'    => $total,
 			'offset'   => $offset + $scanned,
 			'complete' => ( $offset + $scanned ) >= $total,

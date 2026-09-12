@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.6
+Stable tag: 1.1.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,14 @@ Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
 
+= 1.1.7 =
+* Fixed: applying a suggestion no longer inserts the link inside an image's alt text, a caption, a block's settings, an HTML comment, a script, a style block or a form field, or inside an existing link - including a link that spans more than one block, which used to nest a link inside a link and break both. Only visible text is linked, and the link uses the text exactly as written in the post (capitalisation preserved).
+* Fixed: if the post could not be saved, applying a suggestion now reports the failure instead of marking the suggestion as applied. Saving no longer strips embeds or other HTML from the rest of the post for users without the unfiltered_html capability.
+* Fixed: on sites installed in a subdirectory, links written as /subdirectory/page/ were not recognised as internal, so every post looked orphaned. Relative links (page/, ../page/, ?page_id=12) and links whose host differs only by case or a www. prefix are now recognised too.
+* Fixed: failed database writes while generating, applying or dismissing suggestions are now reported instead of being counted as done.
+* Fixed: very long post titles are shortened at a word boundary when used as a keyword, and titles with unusual characters no longer produce empty suggestions.
+* Fixed: the Context column on the Suggestions tab no longer goes blank for unusual characters.
+
 = 1.1.6 =
 * Readme: corrected the AI re-ranking disclosure (the Google API key is sent in a request header, not in the URL) and added the missing 1.1.5 changelog entry. No functional change.
 
@@ -124,6 +132,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.7 =
+Applying a suggestion no longer breaks image or block markup, save failures are reported, and subdirectory installs now detect internal links correctly.
 
 = 1.0.0 =
 Initial release.

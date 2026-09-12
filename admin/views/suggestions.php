@@ -87,15 +87,13 @@ defined( 'ABSPATH' ) || exit;
 							<strong><?php esc_html_e( 'Context:', 'dragon-internal-links' ); ?></strong>
 							<blockquote>
 								<?php
-								$dragoninternallinks_context = $dragoninternallinks_suggestion['context'];
-								$dragoninternallinks_keyword = $dragoninternallinks_suggestion['keyword'];
-								// Highlight keyword in context
-								$dragoninternallinks_highlighted = preg_replace(
-									'/(' . preg_quote( $dragoninternallinks_keyword, '/' ) . ')/iu',
-									'<mark>$1</mark>',
-									esc_html( $dragoninternallinks_context )
+								echo wp_kses(
+									\DragonInternalLinks\Admin::highlight_keyword(
+										(string) $dragoninternallinks_suggestion['context'],
+										(string) $dragoninternallinks_suggestion['keyword']
+									),
+									array( 'mark' => array() )
 								);
-								echo wp_kses( $dragoninternallinks_highlighted, array( 'mark' => array() ) );
 								?>
 							</blockquote>
 						</div>

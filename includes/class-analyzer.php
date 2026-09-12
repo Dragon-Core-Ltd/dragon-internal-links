@@ -14,6 +14,11 @@ defined( 'ABSPATH' ) || exit;
 class Analyzer {
 
 	/**
+	 * Maximum keyword length in characters (the keyword column is varchar(255)).
+	 */
+	private const KEYWORD_MAX_LENGTH = 255;
+
+	/**
 	 * Scanner instance
 	 */
 	private Scanner $scanner;
@@ -224,16 +229,20 @@ class Analyzer {
 	 *
 	 * @param int $batch_size Posts per batch.
 	 * @param int $offset     Post offset to start from.
-	 * @return array{generated:int,offset:int,total:int,done:bool}
+	 * @return array{generated:int,failed:int,stale:bool,offset:int,total:int,done:bool}
 	 */
 	public function generate_all_suggestions( int $batch_size = 20, int $offset = 0 ): array {
 		global $wpdb;
 
+		$stale = false;
+
 		if ( 0 === $offset ) {
-			// Fresh pass: clear old pending suggestions once.
+			// Fresh pass: clear old pending suggestions once. If the clear fails
+			// the new pass is mixed in with the previous one, so the caller is told
+			// rather than presenting the totals as a fresh result.
 			$table = $wpdb->prefix . 'dil_suggestions';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
-			$wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
+			$stale = false === $wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
 		}
 
 		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
@@ -253,11 +262,18 @@ class Analyzer {
 		$ids       = array_map( 'intval', $query->posts );
 		$total     = (int) $query->found_posts;
 		$generated = 0;
+		$failed    = 0;
 
 		foreach ( $ids as $post_id ) {
 			foreach ( $this->generate_suggestions_for_post( $post_id ) as $suggestion ) {
-				$this->store_suggestion( $suggestion );
-				++$generated;
+				if ( $this->store_suggestion( $suggestion ) ) {
+					++$generated;
+					continue;
+				}
+
+				// Pagination advances and the run completes either way, so an
+				// unreported failure reads as "analysed everything, found nothing".
+				++$failed;
 			}
 		}
 
@@ -265,6 +281,8 @@ class Analyzer {
 
 		return array(
 			'generated' => $generated,
+			'failed'    => $failed,
+			'stale'     => $stale,
 			'offset'    => $next,
 			'total'     => $total,
 			'done'      => array() === $ids || $next >= $total,
@@ -361,22 +379,53 @@ class Analyzer {
 
 		$keywords = array();
 
-		// Full title as keyword
+		// Full title as keyword. preg_replace() returns null on invalid UTF-8
+		// (the /u flag); the raw title is used as-is in that case.
 		$clean_title = preg_replace( '/[^\w\s]/u', '', $text );
-		$words       = preg_split( '/\s+/', trim( $clean_title ) );
+		if ( ! is_string( $clean_title ) ) {
+			$clean_title = $text;
+		}
+		$clean_title = trim( $clean_title );
+		$words       = preg_split( '/\s+/', $clean_title );
+		if ( ! is_array( $words ) ) {
+			$words = array( $clean_title );
+		}
 
 		if ( count( $words ) >= $min_words ) {
-			$keywords[] = $clean_title;
+			$keywords[] = self::cap_keyword( $clean_title );
 		}
 
 		// Also try shorter meaningful phrases
 		$meaningful_words = array_filter( $words, fn( $w ) => ! in_array( strtolower( $w ), $stop_words, true ) && strlen( $w ) > 2 );
 
 		if ( count( $meaningful_words ) >= 2 ) {
-			$keywords[] = implode( ' ', array_slice( $meaningful_words, 0, 3 ) );
+			$keywords[] = self::cap_keyword( implode( ' ', array_slice( $meaningful_words, 0, 3 ) ) );
 		}
 
-		return array_unique( $keywords );
+		return array_values( array_unique( array_filter( $keywords, fn( $k ) => '' !== $k ) ) );
+	}
+
+	/**
+	 * Cap a keyword to the suggestions table's keyword column (varchar(255)),
+	 * cutting at a word boundary so the stored keyword is exactly what was
+	 * generated and matched, and the anchor text never ends mid-word.
+	 *
+	 * @param string $keyword Keyword.
+	 * @return string
+	 */
+	private static function cap_keyword( string $keyword ): string {
+		if ( mb_strlen( $keyword ) <= self::KEYWORD_MAX_LENGTH ) {
+			return $keyword;
+		}
+
+		$capped = mb_substr( $keyword, 0, self::KEYWORD_MAX_LENGTH );
+		$space  = mb_strrpos( $capped, ' ' );
+
+		if ( false !== $space && $space > 0 ) {
+			$capped = mb_substr( $capped, 0, $space );
+		}
+
+		return rtrim( $capped );
 	}
 
 	/**
@@ -468,14 +517,15 @@ class Analyzer {
 	 * Store a suggestion in the database
 	 *
 	 * @param array $suggestion Suggestion data
+	 * @return bool True if the row was written.
 	 */
-	private function store_suggestion( array $suggestion ): void {
+	private function store_suggestion( array $suggestion ): bool {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'dil_suggestions';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom plugin table; no core API available.
-		$wpdb->insert(
+		$result = $wpdb->insert(
 			$table,
 			array(
 				'source_post_id'  => $suggestion['source_post_id'],
@@ -487,6 +537,8 @@ class Analyzer {
 			),
 			array( '%d', '%d', '%s', '%s', '%f', '%s' )
 		);
+
+		return false !== $result;
 	}
 
 	/**
@@ -526,20 +578,43 @@ class Analyzer {
 	 *
 	 * @param int    $suggestion_id Suggestion ID
 	 * @param string $status        New status (applied, dismissed)
+	 * @return bool False if the write failed or the row is gone. A row that
+	 *              already holds the requested status counts as success.
 	 */
-	public function update_suggestion_status( int $suggestion_id, string $status ): void {
+	public function update_suggestion_status( int $suggestion_id, string $status ): bool {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'dil_suggestions';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
-		$wpdb->update(
+		$result = $wpdb->update(
 			$table,
 			array( 'status' => $status ),
 			array( 'id' => $suggestion_id ),
 			array( '%s' ),
 			array( '%d' )
 		);
+
+		if ( false === $result ) {
+			return false;
+		}
+
+		if ( (int) $result > 0 ) {
+			return true;
+		}
+
+		/*
+		 * 0 changed rows is ambiguous: the row may already hold this status, which
+		 * is a success, or it may have been deleted, in which case nothing was
+		 * dismissed and saying otherwise would be untrue. The stored status
+		 * settles it.
+		 */
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Uncached read that disambiguates the write just made.
+		$stored = $wpdb->get_var(
+			$wpdb->prepare( 'SELECT status FROM %i WHERE id = %d', $table, $suggestion_id )
+		);
+
+		return null !== $stored && (string) $stored === $status;
 	}
 
 	/**

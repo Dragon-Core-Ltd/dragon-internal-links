@@ -159,6 +159,37 @@ class Admin {
 	}
 
 	/**
+	 * Escape a suggestion's context and wrap the keyword in <mark>.
+	 *
+	 * preg_replace() returns null when the context is not valid UTF-8 (the /u
+	 * flag), and a keyword that is not valid UTF-8 cannot be compiled into a /u
+	 * pattern; both fall back to the escaped context with no highlight rather
+	 * than a blank column.
+	 *
+	 * @param string $context Raw context text.
+	 * @param string $keyword Keyword to highlight.
+	 * @return string Escaped HTML containing only <mark> tags.
+	 */
+	public static function highlight_keyword( string $context, string $keyword ): string {
+		// esc_html() returns an empty string for text that is not valid UTF-8, so
+		// a stray byte anywhere in the excerpt would blank the whole column. The
+		// invalid bytes are dropped first and the rest of the text is kept.
+		$escaped = esc_html( wp_check_invalid_utf8( $context, true ) );
+
+		if ( '' === $keyword || 1 !== preg_match( '//u', $keyword ) ) {
+			return $escaped;
+		}
+
+		$highlighted = preg_replace(
+			'/(' . preg_quote( $keyword, '/' ) . ')/iu',
+			'<mark>$1</mark>',
+			$escaped
+		);
+
+		return is_string( $highlighted ) ? $highlighted : $escaped;
+	}
+
+	/**
 	 * Render suggestions page
 	 */
 	public function render_suggestions_page(): void {

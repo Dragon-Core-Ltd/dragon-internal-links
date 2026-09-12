@@ -1,0 +1,177 @@
+<?php
+/**
+ * Ajax handler tests: apply and dismiss suggestion outcomes.
+ *
+ * @package DragonInternalLinks
+ */
+
+namespace DragonInternalLinks\Tests;
+
+use DragonInternalLinks\Ajax;
+use DragonInternalLinks\Analyzer;
+use DragonInternalLinks\Scanner;
+use PHPUnit\Framework\TestCase;
+
+require_once __DIR__ . '/../includes/class-scanner.php';
+require_once __DIR__ . '/../includes/class-analyzer.php';
+require_once __DIR__ . '/../includes/class-linker.php';
+require_once __DIR__ . '/../includes/class-ajax.php';
+
+/**
+ * Scanner whose re-scan after apply is a recorded no-op.
+ */
+final class AjaxTestScanner extends Scanner {
+	public array $scanned = array();
+
+	public function scan_post( int $post_id ): array {
+		$this->scanned[] = $post_id;
+		return array();
+	}
+}
+
+final class AjaxTest extends TestCase {
+
+	private AjaxTestScanner $scanner;
+	private Ajax $ajax;
+
+	protected function setUp(): void {
+		dragoninternallinks_test_reset();
+		$_POST = array( 'suggestion_id' => '9' );
+
+		$this->scanner = new AjaxTestScanner();
+		$this->ajax    = new Ajax( $this->scanner, new Analyzer( $this->scanner ) );
+
+		$GLOBALS['wpdb']->returns['get_row'] = array(
+			'id'             => 9,
+			'source_post_id' => 5,
+			'target_post_id' => 7,
+			'keyword'        => 'coffee beans guide',
+		);
+		$GLOBALS['wpdb']->returns['update']  = 1;
+
+		$post                                                = new \stdClass();
+		$post->ID                                            = 5;
+		$post->post_content                                  = '<!-- wp:paragraph --><p>Our Coffee Beans Guide is here.</p><!-- /wp:paragraph -->';
+		$GLOBALS['dragoninternallinks_test']['posts'][5]      = $post;
+		$GLOBALS['dragoninternallinks_test']['permalinks'][7] = 'https://example.test/coffee-beans-guide/';
+	}
+
+	protected function tearDown(): void {
+		$_POST = array();
+	}
+
+	private function apply(): \DragonInternalLinks_Test_Json_Response {
+		try {
+			$this->ajax->handle_apply_suggestion();
+		} catch ( \DragonInternalLinks_Test_Json_Response $response ) {
+			return $response;
+		}
+		$this->fail( 'Handler did not send a JSON response.' );
+	}
+
+	private function dismiss(): \DragonInternalLinks_Test_Json_Response {
+		try {
+			$this->ajax->handle_dismiss_suggestion();
+		} catch ( \DragonInternalLinks_Test_Json_Response $response ) {
+			return $response;
+		}
+		$this->fail( 'Handler did not send a JSON response.' );
+	}
+
+	private function status_updates(): array {
+		return $GLOBALS['wpdb']->calls_to( 'update' );
+	}
+
+	public function test_apply_links_keyword_marks_applied_and_rescans(): void {
+		$response = $this->apply();
+
+		$this->assertTrue( $response->success );
+
+		$writes = dragoninternallinks_test_calls( 'wp_update_post' );
+		$this->assertCount( 1, $writes );
+		$this->assertSame(
+			wp_slash( '<!-- wp:paragraph --><p>Our <a href="https://example.test/coffee-beans-guide/">Coffee Beans Guide</a> is here.</p><!-- /wp:paragraph -->' ),
+			$writes[0][0]['post_content']
+		);
+		$this->assertTrue( $writes[0][1] );
+
+		$updates = $this->status_updates();
+		$this->assertCount( 1, $updates );
+		$this->assertSame( array( 'status' => 'applied' ), $updates[0][1] );
+		$this->assertSame( array( 'id' => 9 ), $updates[0][2] );
+		$this->assertSame( array( 5 ), $this->scanner->scanned );
+	}
+
+	public function test_apply_reports_wp_error_before_touching_the_suggestion(): void {
+		$GLOBALS['dragoninternallinks_test']['update_post'] = new \WP_Error( 'db', 'nope' );
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( array(), $this->status_updates() );
+		$this->assertSame( array(), $this->scanner->scanned );
+	}
+
+	public function test_apply_reports_zero_result_before_touching_the_suggestion(): void {
+		$GLOBALS['dragoninternallinks_test']['update_post'] = 0;
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( array(), $this->status_updates() );
+	}
+
+	public function test_apply_reports_failed_status_write(): void {
+		$GLOBALS['wpdb']->returns['update'] = false;
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertCount( 1, dragoninternallinks_test_calls( 'wp_update_post' ) );
+	}
+
+	public function test_apply_reports_missing_keyword_without_saving(): void {
+		$GLOBALS['dragoninternallinks_test']['posts'][5]->post_content = '<p>nothing here</p>';
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( 'Could not find keyword in content.', $response->data['message'] );
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
+		$this->assertSame( array(), $this->status_updates() );
+	}
+
+	public function test_apply_does_not_link_inside_attributes(): void {
+		$GLOBALS['dragoninternallinks_test']['posts'][5]->post_content = '<p><img alt="coffee beans guide"></p>';
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
+	}
+
+	public function test_apply_reports_invalid_utf8_without_saving(): void {
+		$GLOBALS['dragoninternallinks_test']['posts'][5]->post_content = "<p>caf\xE9 coffee beans guide</p>";
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
+		$this->assertSame( array(), $this->status_updates() );
+	}
+
+	public function test_dismiss_reports_failed_write(): void {
+		$GLOBALS['wpdb']->returns['update'] = false;
+
+		$response = $this->dismiss();
+
+		$this->assertFalse( $response->success );
+	}
+
+	public function test_dismiss_succeeds_when_written(): void {
+		$response = $this->dismiss();
+
+		$this->assertTrue( $response->success );
+		$this->assertSame( array( 'status' => 'dismissed' ), $this->status_updates()[0][1] );
+	}
+}

@@ -58,6 +58,7 @@ class Ajax {
 		$batch_size = 50;
 
 		$result = $this->scanner->scan_all( $batch_size, $offset );
+		$failed = (int) ( $result['failed'] ?? 0 );
 
 		if ( $result['complete'] ) {
 			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local timestamp is intentional; displayed via date_i18n().
@@ -71,13 +72,42 @@ class Ajax {
 				'total'    => $result['total'],
 				'offset'   => $result['offset'],
 				'complete' => $result['complete'],
-				'message'  => $result['complete']
-					/* translators: %d: number of posts processed. */
-					? sprintf( __( 'Scan complete! Processed %d posts.', 'dragon-internal-links' ), $result['total'] )
-					/* translators: 1: number of posts scanned so far, 2: total number of posts. */
-					: sprintf( __( 'Scanning... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] ),
+				'failed'   => $failed,
+				'message'  => self::scan_message( $result, $failed ),
 			)
 		);
+	}
+
+	/**
+	 * The progress or completion message for a scan batch.
+	 *
+	 * @param array $result Scan result.
+	 * @param int   $failed How many posts could not be indexed.
+	 * @return string
+	 */
+	private static function scan_message( array $result, int $failed ): string {
+		if ( $result['complete'] ) {
+			/* translators: %d: number of posts processed. */
+			$message = sprintf( __( 'Scan complete! Processed %d posts.', 'dragon-internal-links' ), $result['total'] );
+		} else {
+			/* translators: 1: number of posts scanned so far, 2: total number of posts. */
+			$message = sprintf( __( 'Scanning... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] );
+		}
+
+		if ( $failed > 0 ) {
+			$message .= ' ' . sprintf(
+				/* translators: %d: number of posts whose links could not be saved. */
+				_n(
+					'%d post could not be indexed and keeps its previous links.',
+					'%d posts could not be indexed and keep their previous links.',
+					$failed,
+					'dragon-internal-links'
+				),
+				$failed
+			);
+		}
+
+		return $message;
 	}
 
 	/**
@@ -97,6 +127,13 @@ class Ajax {
 		}
 
 		$links = $this->scanner->scan_post( $post_id );
+
+		// The links are returned even when the index could not be replaced, so
+		// counting them alone would report a scan that did not actually store
+		// anything.
+		if ( $this->scanner->scan_failed() ) {
+			wp_send_json_error( array( 'message' => __( 'The links could not be saved, so the index is unchanged. Please try again.', 'dragon-internal-links' ) ) );
+		}
 
 		wp_send_json_success(
 			array(
@@ -122,17 +159,45 @@ class Ajax {
 
 		$result = $this->analyzer->generate_all_suggestions( $batch_size, $offset );
 
+		$failed = (int) ( $result['failed'] ?? 0 );
+		$stale  = ! empty( $result['stale'] );
+
+		if ( $result['done'] ) {
+			/* translators: %d: total posts analyzed for link suggestions. */
+			$message = sprintf( __( 'Done - analyzed %d posts for link suggestions.', 'dragon-internal-links' ), $result['total'] );
+		} else {
+			/* translators: 1: posts processed so far, 2: total posts. */
+			$message = sprintf( __( 'Generating... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] );
+		}
+
+		// A suggestion that could not be stored is not on the list, so a run that
+		// reported only the total would read as "nothing to suggest".
+		if ( $failed > 0 ) {
+			$message .= ' ' . sprintf(
+				/* translators: %d: number of suggestions that could not be saved. */
+				_n(
+					'%d suggestion could not be saved.',
+					'%d suggestions could not be saved.',
+					$failed,
+					'dragon-internal-links'
+				),
+				$failed
+			);
+		}
+
+		if ( $stale ) {
+			$message .= ' ' . __( 'Previous suggestions could not be cleared first, so the list may mix this run with an earlier one.', 'dragon-internal-links' );
+		}
+
 		wp_send_json_success(
 			array(
 				'generated' => $result['generated'],
+				'failed'    => $failed,
+				'stale'     => $stale,
 				'offset'    => $result['offset'],
 				'total'     => $result['total'],
 				'done'      => $result['done'],
-				'message'   => $result['done']
-					/* translators: %d: total posts analyzed for link suggestions. */
-					? sprintf( __( 'Done — analyzed %d posts for link suggestions.', 'dragon-internal-links' ), $result['total'] )
-					/* translators: 1: posts processed so far, 2: total posts. */
-					: sprintf( __( 'Generating... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] ),
+				'message'   => $message,
 			)
 		);
 	}
@@ -153,7 +218,9 @@ class Ajax {
 			wp_send_json_error( array( 'message' => __( 'Invalid suggestion ID.', 'dragon-internal-links' ) ) );
 		}
 
-		$this->analyzer->update_suggestion_status( $suggestion_id, 'dismissed' );
+		if ( ! $this->analyzer->update_suggestion_status( $suggestion_id, 'dismissed' ) ) {
+			wp_send_json_error( array( 'message' => __( 'The suggestion could not be updated. Please try again.', 'dragon-internal-links' ) ) );
+		}
 
 		wp_send_json_success(
 			array(
@@ -205,35 +272,27 @@ class Ajax {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );
 		}
 
-		// Build the link HTML
-		$link_html = sprintf(
-			'<a href="%s">%s</a>',
-			esc_url( $target_url ),
-			esc_html( $suggestion['keyword'] )
-		);
+		// Link the first text occurrence of the keyword (never inside a tag,
+		// a block delimiter or an existing link).
+		$linker      = new Linker();
+		$new_content = $linker->insert( (string) $post->post_content, (string) $suggestion['keyword'], (string) $target_url );
 
-		// Replace first occurrence of keyword with link
-		$content = $post->post_content;
-		$keyword = preg_quote( $suggestion['keyword'], '/' );
+		if ( $linker->regex_failed() ) {
+			wp_send_json_error( array( 'message' => __( 'The post content could not be processed, so no change was made.', 'dragon-internal-links' ) ) );
+		}
 
-		// Only replace if not already inside a link
-		$pattern     = '/(?<!["\'>])(' . $keyword . ')(?![^<]*<\/a>)/iu';
-		$new_content = preg_replace( $pattern, $link_html, $content, 1, $count );
-
-		if ( 0 === $count ) {
+		if ( null === $new_content ) {
 			wp_send_json_error( array( 'message' => __( 'Could not find keyword in content.', 'dragon-internal-links' ) ) );
 		}
 
-		// Update post
-		wp_update_post(
-			array(
-				'ID'           => $post->ID,
-				'post_content' => $new_content,
-			)
-		);
+		if ( ! $linker->save( (int) $post->ID, $new_content ) ) {
+			wp_send_json_error( array( 'message' => __( 'The post could not be saved, so no change was made.', 'dragon-internal-links' ) ) );
+		}
 
 		// Mark suggestion as applied
-		$this->analyzer->update_suggestion_status( $suggestion_id, 'applied' );
+		if ( ! $this->analyzer->update_suggestion_status( $suggestion_id, 'applied' ) ) {
+			wp_send_json_error( array( 'message' => __( 'The link was added, but the suggestion could not be marked as applied. Refresh the page.', 'dragon-internal-links' ) ) );
+		}
 
 		// Re-scan the post
 		$this->scanner->scan_post( $post->ID );
