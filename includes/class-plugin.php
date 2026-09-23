@@ -40,6 +40,7 @@ class Plugin {
 	 */
 	private function __construct() {
 		self::migrate_legacy_prefix();
+		add_action( 'init', array( __CLASS__, 'ensure_scheduled' ) );
 		$this->init_components();
 	}
 
@@ -75,6 +76,13 @@ class Plugin {
 		if ( $legacy_cron ) {
 			wp_unschedule_event( $legacy_cron, 'dil_daily_scan' );
 		}
+	}
+
+	/**
+	 * Schedule the daily dragoninternallinks_daily_scan event if it is missing. Runs on init because
+	 * scheduling reads every plugin's translated cron_schedules labels.
+	 */
+	public static function ensure_scheduled(): void {
 		if ( ! wp_next_scheduled( 'dragoninternallinks_daily_scan' ) ) {
 			wp_schedule_event( time(), 'daily', 'dragoninternallinks_daily_scan' );
 		}
