@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.7
+Stable tag: 1.1.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,9 @@ No. Scanning happens in the background and link data is cached. The plugin adds 
 Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
+
+= 1.1.8 =
+* Fixed: when one of this plugin's scheduled tasks needed re-creating, it was scheduled before WordPress had finished loading, which made WordPress log "translation loading was triggered too early" notices that named other plugins. Scheduling now waits until WordPress is ready. The notices only appeared with debug logging switched on.
 
 = 1.1.7 =
 * Fixed: applying a suggestion no longer inserts the link inside an image's alt text, a caption, a block's settings, an HTML comment, a script, a style block or a form field, or inside an existing link - including a link that spans more than one block, which used to nest a link inside a link and break both. Only visible text is linked, and the link uses the text exactly as written in the post (capitalisation preserved).
