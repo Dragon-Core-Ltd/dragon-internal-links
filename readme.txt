@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.8
+Stable tag: 1.1.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,10 @@ Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
 
+= 1.1.9 =
+* Every screen, email and alert is now translatable, and translations bundled in the plugin's languages folder now load. Counts use proper plural forms, and numbers and dates follow your site's language.
+* Priorities, post types and link statuses show readable labels.
+
 = 1.1.8 =
 * Fixed: when one of this plugin's scheduled tasks needed re-creating, it was scheduled before WordPress had finished loading, which made WordPress log "translation loading was triggered too early" notices that named other plugins. Scheduling now waits until WordPress is ready. The notices only appeared with debug logging switched on.
 
@@ -135,6 +139,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.9 =
+Translation-ready throughout.
 
 = 1.1.7 =
 Applying a suggestion no longer breaks image or block markup, save failures are reported, and subdirectory installs now detect internal links correctly.
