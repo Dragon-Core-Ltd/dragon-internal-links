@@ -128,6 +128,8 @@ class Admin {
 					'generating'   => __( 'Generating suggestions...', 'dragon-internal-links' ),
 					'error'        => __( 'An error occurred.', 'dragon-internal-links' ),
 					'confirm'      => __( 'Are you sure?', 'dragon-internal-links' ),
+					'applying'     => __( 'Applying...', 'dragon-internal-links' ),
+					'applyLink'    => __( 'Apply Link', 'dragon-internal-links' ),
 				),
 			)
 		);
@@ -187,6 +189,58 @@ class Admin {
 		);
 
 		return is_string( $highlighted ) ? $highlighted : $escaped;
+	}
+
+	/**
+	 * Translated label for an orphan priority code.
+	 *
+	 * @param string $priority Priority code: high, medium or low.
+	 * @return string
+	 */
+	public static function priority_label( string $priority ): string {
+		$labels = array(
+			'high'   => __( 'High', 'dragon-internal-links' ),
+			'medium' => __( 'Medium', 'dragon-internal-links' ),
+			'low'    => __( 'Low', 'dragon-internal-links' ),
+		);
+
+		return $labels[ $priority ] ?? $priority;
+	}
+
+	/**
+	 * Singular label of a post type, or its slug when the type is not registered.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @return string
+	 */
+	public static function post_type_label( string $post_type ): string {
+		$object = get_post_type_object( $post_type );
+
+		if ( $object && isset( $object->labels->singular_name ) && '' !== (string) $object->labels->singular_name ) {
+			return (string) $object->labels->singular_name;
+		}
+
+		return $post_type;
+	}
+
+	/**
+	 * Label for the status of a broken link's target post.
+	 *
+	 * @param string|null $status Post status, or null when the target post no longer exists.
+	 * @return string
+	 */
+	public static function target_status_label( ?string $status ): string {
+		if ( null === $status || '' === $status ) {
+			return __( 'Deleted', 'dragon-internal-links' );
+		}
+
+		$object = get_post_status_object( $status );
+
+		if ( $object && isset( $object->label ) && '' !== (string) $object->label ) {
+			return (string) $object->label;
+		}
+
+		return $status;
 	}
 
 	/**
@@ -330,11 +384,11 @@ class Admin {
 		$inbound_class = 0 === (int) $stats->inbound_count ? 'dil-orphan' : '';
 
 		printf(
-			'<span class="dil-link-stats %s" title="%s">↓%d ↑%d</span>',
+			'<span class="dil-link-stats %s" title="%s">↓%s ↑%s</span>',
 			esc_attr( $inbound_class ),
 			esc_attr__( 'Inbound / Outbound links', 'dragon-internal-links' ),
-			(int) $stats->inbound_count,
-			(int) $stats->outbound_count
+			esc_html( number_format_i18n( (int) $stats->inbound_count ) ),
+			esc_html( number_format_i18n( (int) $stats->outbound_count ) )
 		);
 	}
 }

@@ -115,7 +115,7 @@
             return;
         }
 
-        $btn.prop('disabled', true).text('Applying...');
+        $btn.prop('disabled', true).text(dilAdmin.i18n.applying);
 
         $.ajax({
             url: dilAdmin.ajaxUrl,
@@ -136,12 +136,12 @@
                     }, 500);
                 } else {
                     alert(response.data.message || dilAdmin.i18n.error);
-                    $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Apply Link');
+                    $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
                 }
             },
             error: function() {
                 alert(dilAdmin.i18n.error);
-                $btn.prop('disabled', false).html('<span class="dashicons dashicons-yes"></span> Apply Link');
+                $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
             }
         });
     });

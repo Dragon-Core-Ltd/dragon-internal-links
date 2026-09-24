@@ -135,6 +135,6 @@ class Scheduler {
 			return __( 'Not scheduled', 'dragon-internal-links' );
 		}
 
-		return date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next );
+		return (string) wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next );
 	}
 }

@@ -34,42 +34,42 @@ defined( 'ABSPATH' ) || exit;
 	<!-- Stats Cards -->
 	<div class="dil-stats-grid">
 		<div class="dil-stat-card">
-			<div class="dil-stat-number"><?php echo esc_html( number_format( $summary['total_links'] ) ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (int) $summary['total_links'] ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Total Internal Links', 'dragon-internal-links' ); ?></div>
 		</div>
 
 		<div class="dil-stat-card">
-			<div class="dil-stat-number"><?php echo esc_html( number_format( $summary['total_posts_scanned'] ) ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (int) $summary['total_posts_scanned'] ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Posts Scanned', 'dragon-internal-links' ); ?></div>
 		</div>
 
 		<div class="dil-stat-card <?php echo $summary['orphan_posts'] > 0 ? 'dil-warning' : ''; ?>">
-			<div class="dil-stat-number"><?php echo esc_html( number_format( $summary['orphan_posts'] ) ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (int) $summary['orphan_posts'] ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Orphan Posts', 'dragon-internal-links' ); ?></div>
 			<?php if ( $summary['orphan_posts'] > 0 ) : ?>
 				<a href="<?php echo esc_url( admin_url( 'tools.php?page=dragon-internal-links&tab=orphans' ) ); ?>" class="dil-stat-link">
-					<?php esc_html_e( 'View All', 'dragon-internal-links' ); ?> →
+					<?php esc_html_e( 'View All →', 'dragon-internal-links' ); ?>
 				</a>
 			<?php endif; ?>
 		</div>
 
 		<div class="dil-stat-card <?php echo $summary['broken_links'] > 0 ? 'dil-danger' : ''; ?>">
-			<div class="dil-stat-number"><?php echo esc_html( number_format( $summary['broken_links'] ) ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (int) $summary['broken_links'] ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Broken Links', 'dragon-internal-links' ); ?></div>
 		</div>
 
 		<div class="dil-stat-card dil-highlight">
-			<div class="dil-stat-number"><?php echo esc_html( number_format( $summary['pending_suggestions'] ) ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (int) $summary['pending_suggestions'] ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Link Suggestions', 'dragon-internal-links' ); ?></div>
 			<?php if ( $summary['pending_suggestions'] > 0 ) : ?>
 				<a href="<?php echo esc_url( admin_url( 'tools.php?page=dragon-internal-links&tab=suggestions' ) ); ?>" class="dil-stat-link">
-					<?php esc_html_e( 'Review', 'dragon-internal-links' ); ?> →
+					<?php esc_html_e( 'Review →', 'dragon-internal-links' ); ?>
 				</a>
 			<?php endif; ?>
 		</div>
 
 		<div class="dil-stat-card">
-			<div class="dil-stat-number"><?php echo esc_html( $summary['avg_inbound'] ); ?></div>
+			<div class="dil-stat-number"><?php echo esc_html( number_format_i18n( (float) $summary['avg_inbound'], 1 ) ); ?></div>
 			<div class="dil-stat-label"><?php esc_html_e( 'Avg Inbound Links', 'dragon-internal-links' ); ?></div>
 		</div>
 	</div>
@@ -134,8 +134,8 @@ defined( 'ABSPATH' ) || exit;
 											<?php echo esc_html( $dragoninternallinks_post['post_title'] ); ?>
 										</a>
 									</td>
-									<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['inbound_count'] ); ?></td>
-									<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></td>
+									<td class="dil-center"><?php echo esc_html( number_format_i18n( (int) $dragoninternallinks_post['inbound_count'] ) ); ?></td>
+									<td class="dil-center"><?php echo esc_html( number_format_i18n( (int) $dragoninternallinks_post['outbound_count'] ) ); ?></td>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -176,7 +176,7 @@ defined( 'ABSPATH' ) || exit;
 									</td>
 									<td>
 										<span class="dil-status-badge dil-status-broken">
-											<?php echo esc_html( $dragoninternallinks_link['target_status'] ?? 'deleted' ); ?>
+											<?php echo esc_html( \DragonInternalLinks\Admin::target_status_label( $dragoninternallinks_link['target_status'] ?? null ) ); ?>
 										</span>
 									</td>
 								</tr>
@@ -187,10 +187,13 @@ defined( 'ABSPATH' ) || exit;
 					<?php if ( count( $broken_links ) > 10 ) : ?>
 						<p class="dil-more">
 							<?php
-							printf(
-								/* translators: %d: number of additional broken links not shown. */
-								esc_html__( '...and %d more', 'dragon-internal-links' ),
-								(int) ( count( $broken_links ) - 10 )
+							$dragoninternallinks_more = count( $broken_links ) - 10;
+							echo esc_html(
+								sprintf(
+									/* translators: %s: number of additional broken links not shown. */
+									_n( '...and %s more', '...and %s more', $dragoninternallinks_more, 'dragon-internal-links' ),
+									number_format_i18n( $dragoninternallinks_more )
+								)
 							);
 							?>
 						</p>

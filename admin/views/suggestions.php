@@ -32,7 +32,7 @@ defined( 'ABSPATH' ) || exit;
 	</nav>
 
 	<p class="dil-description">
-		<?php esc_html_e( 'These are opportunities to add internal links based on keyword matches in your content. Click "Apply" to automatically add the link, or "Dismiss" to hide the suggestion.', 'dragon-internal-links' ); ?>
+		<?php esc_html_e( 'These are opportunities to add internal links based on keyword matches in your content. Click "Apply Link" to automatically add the link, or "Dismiss" to hide the suggestion.', 'dragon-internal-links' ); ?>
 	</p>
 
 	<div class="dil-actions" style="margin-bottom: 20px;">
@@ -72,7 +72,7 @@ defined( 'ABSPATH' ) || exit;
 						</div>
 						<div class="dil-suggestion-relevance">
 							<span class="dil-relevance-score" title="<?php esc_attr_e( 'Relevance Score', 'dragon-internal-links' ); ?>">
-								<?php echo esc_html( number_format( $dragoninternallinks_suggestion['relevance_score'], 1 ) ); ?>
+								<?php echo esc_html( number_format_i18n( (float) $dragoninternallinks_suggestion['relevance_score'], 1 ) ); ?>
 							</span>
 						</div>
 					</div>

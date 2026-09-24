@@ -87,23 +87,26 @@ class Ajax {
 	 */
 	private static function scan_message( array $result, int $failed ): string {
 		if ( $result['complete'] ) {
-			/* translators: %d: number of posts processed. */
-			$message = sprintf( __( 'Scan complete! Processed %d posts.', 'dragon-internal-links' ), $result['total'] );
+			$message = sprintf(
+				/* translators: %s: number of posts processed. */
+				_n( 'Scan complete! Processed %s post.', 'Scan complete! Processed %s posts.', (int) $result['total'], 'dragon-internal-links' ),
+				number_format_i18n( (int) $result['total'] )
+			);
 		} else {
 			/* translators: 1: number of posts scanned so far, 2: total number of posts. */
-			$message = sprintf( __( 'Scanning... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] );
+			$message = sprintf( __( 'Scanning... %1$s / %2$s', 'dragon-internal-links' ), number_format_i18n( (int) $result['offset'] ), number_format_i18n( (int) $result['total'] ) );
 		}
 
 		if ( $failed > 0 ) {
 			$message .= ' ' . sprintf(
-				/* translators: %d: number of posts whose links could not be saved. */
+				/* translators: %s: number of posts whose links could not be saved. */
 				_n(
-					'%d post could not be indexed and keeps its previous links.',
-					'%d posts could not be indexed and keep their previous links.',
+					'%s post could not be indexed and keeps its previous links.',
+					'%s posts could not be indexed and keep their previous links.',
 					$failed,
 					'dragon-internal-links'
 				),
-				$failed
+				number_format_i18n( $failed )
 			);
 		}
 
@@ -138,8 +141,11 @@ class Ajax {
 		wp_send_json_success(
 			array(
 				'links_found' => count( $links ),
-				/* translators: %d: number of internal links found. */
-				'message'     => sprintf( __( 'Found %d internal links.', 'dragon-internal-links' ), count( $links ) ),
+				'message'     => sprintf(
+					/* translators: %s: number of internal links found. */
+					_n( 'Found %s internal link.', 'Found %s internal links.', count( $links ), 'dragon-internal-links' ),
+					number_format_i18n( count( $links ) )
+				),
 			)
 		);
 	}
@@ -163,25 +169,28 @@ class Ajax {
 		$stale  = ! empty( $result['stale'] );
 
 		if ( $result['done'] ) {
-			/* translators: %d: total posts analyzed for link suggestions. */
-			$message = sprintf( __( 'Done - analyzed %d posts for link suggestions.', 'dragon-internal-links' ), $result['total'] );
+			$message = sprintf(
+				/* translators: %s: total posts analyzed for link suggestions. */
+				_n( 'Done - analyzed %s post for link suggestions.', 'Done - analyzed %s posts for link suggestions.', (int) $result['total'], 'dragon-internal-links' ),
+				number_format_i18n( (int) $result['total'] )
+			);
 		} else {
 			/* translators: 1: posts processed so far, 2: total posts. */
-			$message = sprintf( __( 'Generating... %1$d / %2$d', 'dragon-internal-links' ), $result['offset'], $result['total'] );
+			$message = sprintf( __( 'Generating... %1$s / %2$s', 'dragon-internal-links' ), number_format_i18n( (int) $result['offset'] ), number_format_i18n( (int) $result['total'] ) );
 		}
 
 		// A suggestion that could not be stored is not on the list, so a run that
 		// reported only the total would read as "nothing to suggest".
 		if ( $failed > 0 ) {
 			$message .= ' ' . sprintf(
-				/* translators: %d: number of suggestions that could not be saved. */
+				/* translators: %s: number of suggestions that could not be saved. */
 				_n(
-					'%d suggestion could not be saved.',
-					'%d suggestions could not be saved.',
+					'%s suggestion could not be saved.',
+					'%s suggestions could not be saved.',
 					$failed,
 					'dragon-internal-links'
 				),
-				$failed
+				number_format_i18n( $failed )
 			);
 		}
 

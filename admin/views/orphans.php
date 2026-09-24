@@ -39,13 +39,13 @@ defined( 'ABSPATH' ) || exit;
 	<div class="dil-card">
 		<h2>
 			<?php esc_html_e( 'Posts with Zero Inbound Links', 'dragon-internal-links' ); ?>
-			<span class="dil-count">(<?php echo count( $orphans ); ?>)</span>
+			<span class="dil-count">(<?php echo esc_html( number_format_i18n( count( $orphans ) ) ); ?>)</span>
 		</h2>
 
 		<?php if ( empty( $orphans ) && empty( $last_scan ) ) : ?>
 			<div class="dragon-card dragon-firstrun" style="max-width:640px;">
 				<h3 style="margin-top:0;"><?php esc_html_e( 'No scan yet', 'dragon-internal-links' ); ?></h3>
-				<p><?php esc_html_e( 'Orphan detection needs a first scan of your content. Run one from the Dashboard tab — on most sites it takes under a minute.', 'dragon-internal-links' ); ?></p>
+				<p><?php esc_html_e( 'Orphan detection needs a first scan of your content. Run one from the Dashboard tab - on most sites it takes under a minute.', 'dragon-internal-links' ); ?></p>
 				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'tools.php?page=dragon-internal-links' ) ); ?>">
 					<?php esc_html_e( 'Go to Dashboard', 'dragon-internal-links' ); ?>
 				</a>
@@ -77,16 +77,16 @@ defined( 'ABSPATH' ) || exit;
 									</a>
 								</strong>
 							</td>
-							<td><?php echo esc_html( $dragoninternallinks_post['post_type'] ); ?></td>
+							<td><?php echo esc_html( \DragonInternalLinks\Admin::post_type_label( (string) $dragoninternallinks_post['post_type'] ) ); ?></td>
 							<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $dragoninternallinks_post['post_date'] ) ) ); ?></td>
-							<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></td>
+							<td class="dil-center"><?php echo esc_html( number_format_i18n( (int) $dragoninternallinks_post['outbound_count'] ) ); ?></td>
 							<td>
 								<?php
 								$dragoninternallinks_score          = (float) $dragoninternallinks_post['orphan_score'];
 								$dragoninternallinks_priority_class = $dragoninternallinks_score > 5 ? 'high' : ( $dragoninternallinks_score > 2 ? 'medium' : 'low' );
 								?>
 								<span class="dil-priority dil-priority-<?php echo esc_attr( $dragoninternallinks_priority_class ); ?>">
-									<?php echo esc_html( ucfirst( $dragoninternallinks_priority_class ) ); ?>
+									<?php echo esc_html( \DragonInternalLinks\Admin::priority_label( $dragoninternallinks_priority_class ) ); ?>
 								</span>
 							</td>
 							<td>
@@ -108,7 +108,7 @@ defined( 'ABSPATH' ) || exit;
 	<div class="dil-card" style="margin-top: 20px;">
 		<h2>
 			<?php esc_html_e( 'Posts with Few Outbound Links', 'dragon-internal-links' ); ?>
-			<span class="dil-count">(<?php echo count( $low_outbound ); ?>)</span>
+			<span class="dil-count">(<?php echo esc_html( number_format_i18n( count( $low_outbound ) ) ); ?>)</span>
 		</h2>
 
 		<p class="dil-description">
@@ -141,9 +141,9 @@ defined( 'ABSPATH' ) || exit;
 								</a>
 							</td>
 							<td class="dil-center">
-								<span class="dil-badge dil-badge-warning"><?php echo esc_html( $dragoninternallinks_post['outbound_count'] ); ?></span>
+								<span class="dil-badge dil-badge-warning"><?php echo esc_html( number_format_i18n( (int) $dragoninternallinks_post['outbound_count'] ) ); ?></span>
 							</td>
-							<td class="dil-center"><?php echo esc_html( $dragoninternallinks_post['inbound_count'] ); ?></td>
+							<td class="dil-center"><?php echo esc_html( number_format_i18n( (int) $dragoninternallinks_post['inbound_count'] ) ); ?></td>
 							<td>
 								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>" class="button button-small button-primary">
 									<?php esc_html_e( 'Add Links', 'dragon-internal-links' ); ?>

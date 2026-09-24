@@ -1,0 +1,560 @@
+# Copyright (C) 2026 Dragon Core
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Dragon Internal Links 1.1.8\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/dragon-internal-links\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-09-24T17:14:08+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.11.0\n"
+"X-Domain: dragon-internal-links\n"
+
+#. Plugin Name of the plugin
+#: dragon-internal-links.php
+#: admin/views/dashboard.php:16
+#: admin/views/orphans.php:16
+#: admin/views/settings.php:16
+#: admin/views/suggestions.php:16
+#: includes/class-admin.php:54
+msgid "Dragon Internal Links"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: dragon-internal-links.php
+msgid "https://dragoncore.ltd/plugins/dragon-internal-links"
+msgstr ""
+
+#. Description of the plugin
+#: dragon-internal-links.php
+msgid "Find internal linking opportunities, detect orphan content, and improve your site's SEO structure."
+msgstr ""
+
+#. Author of the plugin
+#: dragon-internal-links.php
+msgid "Dragon Core"
+msgstr ""
+
+#. Author URI of the plugin
+#: dragon-internal-links.php
+msgid "https://dragoncore.ltd"
+msgstr ""
+
+#: admin/views/dashboard.php:21
+#: admin/views/orphans.php:21
+#: admin/views/settings.php:21
+#: admin/views/suggestions.php:21
+msgid "Dashboard"
+msgstr ""
+
+#: admin/views/dashboard.php:24
+#: admin/views/dashboard.php:48
+#: admin/views/orphans.php:24
+#: admin/views/settings.php:24
+#: admin/views/suggestions.php:24
+msgid "Orphan Posts"
+msgstr ""
+
+#: admin/views/dashboard.php:27
+#: admin/views/orphans.php:27
+#: admin/views/settings.php:27
+#: admin/views/suggestions.php:27
+msgid "Suggestions"
+msgstr ""
+
+#: admin/views/dashboard.php:30
+#: admin/views/orphans.php:30
+#: admin/views/settings.php:30
+#: admin/views/suggestions.php:30
+#: dragon-internal-links.php:85
+msgid "Settings"
+msgstr ""
+
+#: admin/views/dashboard.php:38
+msgid "Total Internal Links"
+msgstr ""
+
+#: admin/views/dashboard.php:43
+msgid "Posts Scanned"
+msgstr ""
+
+#: admin/views/dashboard.php:51
+msgid "View All →"
+msgstr ""
+
+#: admin/views/dashboard.php:58
+msgid "Broken Links"
+msgstr ""
+
+#: admin/views/dashboard.php:63
+msgid "Link Suggestions"
+msgstr ""
+
+#: admin/views/dashboard.php:66
+msgid "Review →"
+msgstr ""
+
+#: admin/views/dashboard.php:73
+msgid "Avg Inbound Links"
+msgstr ""
+
+#: admin/views/dashboard.php:81
+msgid "Scan All Posts"
+msgstr ""
+
+#: admin/views/dashboard.php:86
+msgid "Generate Suggestions"
+msgstr ""
+
+#. translators: %s: date and time of the last scan.
+#: admin/views/dashboard.php:105
+msgid "Last scan: %s"
+msgstr ""
+
+#: admin/views/dashboard.php:116
+msgid "Most Linked Posts"
+msgstr ""
+
+#: admin/views/dashboard.php:119
+msgid "No data yet. Run a scan to get started."
+msgstr ""
+
+#: admin/views/dashboard.php:124
+#: admin/views/orphans.php:62
+#: admin/views/orphans.php:129
+msgid "Post"
+msgstr ""
+
+#: admin/views/dashboard.php:125
+msgid "Inbound"
+msgstr ""
+
+#: admin/views/dashboard.php:126
+msgid "Outbound"
+msgstr ""
+
+#: admin/views/dashboard.php:150
+msgid "Broken Internal Links"
+msgstr ""
+
+#: admin/views/dashboard.php:155
+msgid "No broken links found!"
+msgstr ""
+
+#: admin/views/dashboard.php:161
+msgid "Source"
+msgstr ""
+
+#: admin/views/dashboard.php:162
+msgid "Broken Link"
+msgstr ""
+
+#: admin/views/dashboard.php:163
+msgid "Status"
+msgstr ""
+
+#. translators: %s: number of additional broken links not shown.
+#: admin/views/dashboard.php:194
+msgid "...and %s more"
+msgid_plural "...and %s more"
+msgstr[0] ""
+msgstr[1] ""
+
+#: admin/views/orphans.php:35
+msgid "Orphan posts have no internal links pointing to them. Adding internal links helps search engines discover this content and passes link equity."
+msgstr ""
+
+#: admin/views/orphans.php:41
+msgid "Posts with Zero Inbound Links"
+msgstr ""
+
+#: admin/views/orphans.php:47
+msgid "No scan yet"
+msgstr ""
+
+#: admin/views/orphans.php:48
+msgid "Orphan detection needs a first scan of your content. Run one from the Dashboard tab - on most sites it takes under a minute."
+msgstr ""
+
+#: admin/views/orphans.php:50
+msgid "Go to Dashboard"
+msgstr ""
+
+#: admin/views/orphans.php:56
+msgid "Great! All your posts have at least one internal link pointing to them."
+msgstr ""
+
+#: admin/views/orphans.php:63
+msgid "Type"
+msgstr ""
+
+#: admin/views/orphans.php:64
+msgid "Published"
+msgstr ""
+
+#: admin/views/orphans.php:65
+#: admin/views/orphans.php:130
+msgid "Outbound Links"
+msgstr ""
+
+#: admin/views/orphans.php:66
+msgid "Priority"
+msgstr ""
+
+#: admin/views/orphans.php:67
+#: admin/views/orphans.php:132
+msgid "Actions"
+msgstr ""
+
+#: admin/views/orphans.php:94
+msgid "View"
+msgstr ""
+
+#: admin/views/orphans.php:97
+msgid "Edit"
+msgstr ""
+
+#: admin/views/orphans.php:110
+msgid "Posts with Few Outbound Links"
+msgstr ""
+
+#: admin/views/orphans.php:115
+msgid "These posts have 2 or fewer outbound internal links. Consider adding more to improve site structure."
+msgstr ""
+
+#: admin/views/orphans.php:119
+msgid "Run a scan first to see outbound link coverage."
+msgstr ""
+
+#: admin/views/orphans.php:123
+msgid "All posts have good outbound link coverage."
+msgstr ""
+
+#: admin/views/orphans.php:131
+msgid "Inbound Links"
+msgstr ""
+
+#: admin/views/orphans.php:149
+msgid "Add Links"
+msgstr ""
+
+#: admin/views/settings.php:40
+msgid "Scanning Options"
+msgstr ""
+
+#: admin/views/settings.php:44
+msgid "Post Types to Scan"
+msgstr ""
+
+#: admin/views/settings.php:68
+msgid "Auto-scan on Save"
+msgstr ""
+
+#: admin/views/settings.php:77
+msgid "Automatically scan posts when they are saved"
+msgstr ""
+
+#: admin/views/settings.php:84
+msgid "Full Scan Frequency"
+msgstr ""
+
+#: admin/views/settings.php:89
+msgid "Daily"
+msgstr ""
+
+#: admin/views/settings.php:92
+msgid "Weekly"
+msgstr ""
+
+#: admin/views/settings.php:96
+msgid "How often to run a full site scan in the background."
+msgstr ""
+
+#: admin/views/settings.php:104
+msgid "Suggestion Options"
+msgstr ""
+
+#: admin/views/settings.php:109
+msgid "Minimum Keyword Words"
+msgstr ""
+
+#: admin/views/settings.php:120
+msgid "Minimum number of words in a keyword phrase for suggestions. Higher = more specific matches."
+msgstr ""
+
+#: admin/views/settings.php:126
+msgid "Exclude Categories"
+msgstr ""
+
+#: admin/views/settings.php:143
+msgid "Posts in these categories will be excluded from scanning."
+msgstr ""
+
+#: admin/views/settings.php:151
+msgid "AI Suggestion Ranking"
+msgstr ""
+
+#: admin/views/settings.php:153
+msgid "Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. One small request per post when generating suggestions; your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring."
+msgstr ""
+
+#: admin/views/settings.php:158
+msgid "Enable AI ranking"
+msgstr ""
+
+#: admin/views/settings.php:162
+msgid "Use an AI model to score suggestion relevance"
+msgstr ""
+
+#: admin/views/settings.php:168
+msgid "Provider"
+msgstr ""
+
+#: admin/views/settings.php:181
+msgid "Model"
+msgstr ""
+
+#: admin/views/settings.php:191
+msgid "Leave blank for the provider default. A small, cheap model is plenty for ranking."
+msgstr ""
+
+#: admin/views/settings.php:197
+msgid "API key"
+msgstr ""
+
+#: admin/views/settings.php:207
+msgid "Stored encrypted. Leave the dots untouched to keep the saved key; clear the field to remove it."
+msgstr ""
+
+#: admin/views/settings.php:212
+msgid "Delete all data on uninstall"
+msgstr ""
+
+#: admin/views/settings.php:216
+msgid "When the plugin is deleted, remove the link index, suggestions and settings. Leave off to keep them for a future reinstall."
+msgstr ""
+
+#: admin/views/settings.php:223
+msgid "Save Settings"
+msgstr ""
+
+#: admin/views/suggestions.php:35
+msgid "These are opportunities to add internal links based on keyword matches in your content. Click \"Apply Link\" to automatically add the link, or \"Dismiss\" to hide the suggestion."
+msgstr ""
+
+#: admin/views/suggestions.php:41
+msgid "Refresh Suggestions"
+msgstr ""
+
+#: admin/views/suggestions.php:50
+msgid "No suggestions available. Click \"Refresh Suggestions\" to generate new ones, or scan your posts first."
+msgstr ""
+
+#: admin/views/suggestions.php:60
+msgid "From:"
+msgstr ""
+
+#: admin/views/suggestions.php:67
+msgid "Link to:"
+msgstr ""
+
+#: admin/views/suggestions.php:74
+msgid "Relevance Score"
+msgstr ""
+
+#: admin/views/suggestions.php:82
+msgid "Keyword:"
+msgstr ""
+
+#: admin/views/suggestions.php:87
+msgid "Context:"
+msgstr ""
+
+#: admin/views/suggestions.php:105
+#: includes/class-admin.php:132
+msgid "Apply Link"
+msgstr ""
+
+#: admin/views/suggestions.php:109
+msgid "Dismiss"
+msgstr ""
+
+#: admin/views/suggestions.php:112
+msgid "Edit Post"
+msgstr ""
+
+#: includes/class-admin.php:55
+msgid "Internal Links"
+msgstr ""
+
+#: includes/class-admin.php:67
+#: includes/class-ajax.php:54
+#: includes/class-ajax.php:123
+#: includes/class-ajax.php:160
+#: includes/class-ajax.php:221
+#: includes/class-ajax.php:248
+#: includes/class-ajax.php:281
+msgid "Permission denied."
+msgstr ""
+
+#: includes/class-admin.php:126
+msgid "Scanning..."
+msgstr ""
+
+#: includes/class-admin.php:127
+msgid "Scan complete!"
+msgstr ""
+
+#: includes/class-admin.php:128
+msgid "Generating suggestions..."
+msgstr ""
+
+#: includes/class-admin.php:129
+msgid "An error occurred."
+msgstr ""
+
+#: includes/class-admin.php:130
+msgid "Are you sure?"
+msgstr ""
+
+#: includes/class-admin.php:131
+msgid "Applying..."
+msgstr ""
+
+#: includes/class-admin.php:202
+msgid "High"
+msgstr ""
+
+#: includes/class-admin.php:203
+msgid "Medium"
+msgstr ""
+
+#: includes/class-admin.php:204
+msgid "Low"
+msgstr ""
+
+#: includes/class-admin.php:234
+msgid "Deleted"
+msgstr ""
+
+#: includes/class-admin.php:348
+msgid "Settings saved."
+msgstr ""
+
+#: includes/class-admin.php:355
+msgid "Links"
+msgstr ""
+
+#: includes/class-admin.php:389
+msgid "Inbound / Outbound links"
+msgstr ""
+
+#. translators: %s: number of posts processed.
+#: includes/class-ajax.php:92
+msgid "Scan complete! Processed %s post."
+msgid_plural "Scan complete! Processed %s posts."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: number of posts scanned so far, 2: total number of posts.
+#: includes/class-ajax.php:97
+msgid "Scanning... %1$s / %2$s"
+msgstr ""
+
+#. translators: %s: number of posts whose links could not be saved.
+#: includes/class-ajax.php:103
+msgid "%s post could not be indexed and keeps its previous links."
+msgid_plural "%s posts could not be indexed and keep their previous links."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-ajax.php:129
+msgid "Invalid post ID."
+msgstr ""
+
+#: includes/class-ajax.php:138
+msgid "The links could not be saved, so the index is unchanged. Please try again."
+msgstr ""
+
+#. translators: %s: number of internal links found.
+#: includes/class-ajax.php:146
+msgid "Found %s internal link."
+msgid_plural "Found %s internal links."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s: total posts analyzed for link suggestions.
+#: includes/class-ajax.php:174
+msgid "Done - analyzed %s post for link suggestions."
+msgid_plural "Done - analyzed %s posts for link suggestions."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: posts processed so far, 2: total posts.
+#: includes/class-ajax.php:179
+msgid "Generating... %1$s / %2$s"
+msgstr ""
+
+#. translators: %s: number of suggestions that could not be saved.
+#: includes/class-ajax.php:187
+msgid "%s suggestion could not be saved."
+msgid_plural "%s suggestions could not be saved."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-ajax.php:198
+msgid "Previous suggestions could not be cleared first, so the list may mix this run with an earlier one."
+msgstr ""
+
+#: includes/class-ajax.php:227
+#: includes/class-ajax.php:254
+msgid "Invalid suggestion ID."
+msgstr ""
+
+#: includes/class-ajax.php:231
+msgid "The suggestion could not be updated. Please try again."
+msgstr ""
+
+#: includes/class-ajax.php:236
+msgid "Suggestion dismissed."
+msgstr ""
+
+#: includes/class-ajax.php:267
+msgid "Suggestion not found."
+msgstr ""
+
+#: includes/class-ajax.php:274
+msgid "Post not found."
+msgstr ""
+
+#: includes/class-ajax.php:290
+msgid "The post content could not be processed, so no change was made."
+msgstr ""
+
+#: includes/class-ajax.php:294
+msgid "Could not find keyword in content."
+msgstr ""
+
+#: includes/class-ajax.php:298
+msgid "The post could not be saved, so no change was made."
+msgstr ""
+
+#: includes/class-ajax.php:303
+msgid "The link was added, but the suggestion could not be marked as applied. Refresh the page."
+msgstr ""
+
+#: includes/class-ajax.php:311
+msgid "Link added successfully!"
+msgstr ""
+
+#: includes/class-scheduler.php:123
+msgid "Never"
+msgstr ""
+
+#: includes/class-scheduler.php:135
+msgid "Not scheduled"
+msgstr ""

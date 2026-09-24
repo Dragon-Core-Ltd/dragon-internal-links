@@ -57,6 +57,14 @@ function dragoninternallinks_deactivate() {
 register_deactivation_hook( __FILE__, __NAMESPACE__ . '\dragoninternallinks_deactivate' );
 
 /**
+ * Load bundled translations.
+ */
+function dragoninternallinks_load_textdomain() {
+	load_plugin_textdomain( 'dragon-internal-links', false, dirname( DRAGONINTERNALLINKS_PLUGIN_BASENAME ) . '/languages' );
+}
+add_action( 'init', __NAMESPACE__ . '\dragoninternallinks_load_textdomain', 0 );
+
+/**
  * Initialize the plugin
  */
 function dragoninternallinks_init() {
