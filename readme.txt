@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.10
+Stable tag: 1.1.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,14 @@ Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
 
+= 1.1.11 =
+* Fixed: links to trashed, deleted or draft posts disappeared from Link Health after the next scan. They are now reported on every scan until fixed.
+* Suggestions come from each post's distinctive topic phrases, not only its exact title.
+* Links to media files are no longer reported as broken.
+* Retired AI models move to current ones with a notice, and AI errors show on the Settings screen.
+* Titles with punctuation or non-Latin letters get suggestions, and scan warnings stay on screen.
+* Multisite: tables are created and removed per site.
+
 = 1.1.10 =
 * Unpublished, trashed and deleted posts leave the link index.
 * Dismissed suggestions stay dismissed, and the Exclude Categories and Scan Frequency settings now take effect.
@@ -152,6 +160,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.11 =
+Link Health keeps reporting links to removed posts, and suggestions find more relevant links.
 
 = 1.1.10 =
 More accurate orphan reports and link suggestions.
