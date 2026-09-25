@@ -117,7 +117,7 @@ defined( 'ABSPATH' ) || exit;
 								max="10"
 								class="small-text">
 						<p class="description">
-							<?php esc_html_e( 'Minimum number of words in a keyword phrase for suggestions. Higher = more specific matches.', 'dragon-internal-links' ); ?>
+							<?php esc_html_e( 'Minimum number of words in a keyword phrase for suggestions, for both the full title and the shorter phrase taken from its main words. Higher = more specific matches.', 'dragon-internal-links' ); ?>
 						</p>
 					</td>
 				</tr>
@@ -140,7 +140,7 @@ defined( 'ABSPATH' ) || exit;
 							</label><br>
 						<?php endforeach; ?>
 						<p class="description">
-							<?php esc_html_e( 'Posts in these categories will be excluded from scanning.', 'dragon-internal-links' ); ?>
+							<?php esc_html_e( 'Posts in these categories are excluded from scanning, from link suggestions (as source or target) and from the orphan reports.', 'dragon-internal-links' ); ?>
 						</p>
 					</td>
 				</tr>

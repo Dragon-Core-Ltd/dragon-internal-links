@@ -110,6 +110,10 @@ class Ajax {
 			);
 		}
 
+		if ( $result['complete'] && false === ( $result['pruned'] ?? true ) ) {
+			$message .= ' ' . __( 'Links from posts that are no longer published, scanned or included could not be removed, so some link counts may be too high. Run the scan again.', 'dragon-internal-links' );
+		}
+
 		return $message;
 	}
 
@@ -272,6 +276,14 @@ class Ajax {
 
 		if ( ! $post || ! $target_url ) {
 			wp_send_json_error( array( 'message' => __( 'Post not found.', 'dragon-internal-links' ) ) );
+		}
+
+		// The target may have been drafted, trashed or excluded since the
+		// suggestion was made; linking to it now would add a ?p= or __trashed URL.
+		// The list leaves out such suggestions, and those from a source that has
+		// left the scan, so a stale page is refused the same way.
+		if ( ! Scanner::in_scope( get_post( $suggestion['target_post_id'] ) ) || ! Scanner::in_scope( $post ) ) {
+			wp_send_json_error( array( 'message' => __( 'This suggestion is out of date: its post or the page it links to is no longer published or is excluded from linking, so no change was made. Regenerate suggestions to refresh the list.', 'dragon-internal-links' ) ) );
 		}
 
 		// Applying a suggestion edits the source post's content, so require edit

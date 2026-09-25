@@ -69,7 +69,15 @@ policy. Review the terms above before enabling the feature.
 
 = How often should I scan my site? =
 
-The plugin automatically scans posts when they're saved. A full site scan runs daily by default, but you can trigger manual scans anytime.
+The plugin automatically scans posts when they're saved. A full site scan runs daily by default (or weekly, under Settings > Full Scan Frequency), and you can trigger a manual scan anytime.
+
+= What counts towards a post's inbound links? =
+
+Only links from published posts of the types you scan. When a post is unpublished, made private, trashed or deleted, or is in a category you exclude, its links stop counting, so the pages it linked to can show up as orphans again. Links pointing at a deleted or unpublished post are still listed as broken.
+
+= Will a dismissed suggestion come back? =
+
+No. Dismissing a suggestion stops that page being suggested for that post again, including after the daily regeneration.
 
 = Does this slow down my site? =
 

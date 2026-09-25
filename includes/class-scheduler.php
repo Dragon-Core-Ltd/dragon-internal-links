@@ -29,6 +29,53 @@ class Scheduler {
 	public const CRON_HOOK = 'dragoninternallinks_daily_scan';
 
 	/**
+	 * Full-scan frequencies the settings offer, as core cron recurrences, with
+	 * the interval to the first run after a change.
+	 */
+	public const FREQUENCIES = array(
+		'daily'  => DAY_IN_SECONDS,
+		'weekly' => WEEK_IN_SECONDS,
+	);
+
+	/**
+	 * A frequency value reduced to one the settings offer (daily otherwise).
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function sanitize_frequency( $value ): string {
+		$value = is_string( $value ) ? $value : '';
+
+		return array_key_exists( $value, self::FREQUENCIES ) ? $value : 'daily';
+	}
+
+	/**
+	 * The chosen Full Scan Frequency.
+	 *
+	 * @return string
+	 */
+	public static function frequency(): string {
+		return self::sanitize_frequency( get_option( 'dragoninternallinks_scan_frequency', 'daily' ) );
+	}
+
+	/**
+	 * Replace the recurring scan with one at the given frequency, first run one
+	 * interval from now (a change of setting is not a request to scan now).
+	 * Clearing the hook also drops a pending resume of an unfinished scan; the
+	 * scan's progress is kept in options, so the next run carries on from it.
+	 *
+	 * @param string $frequency Frequency from FREQUENCIES.
+	 * @return bool False when the new event could not be saved.
+	 */
+	public static function reschedule( string $frequency ): bool {
+		$frequency = self::sanitize_frequency( $frequency );
+
+		wp_clear_scheduled_hook( self::CRON_HOOK );
+
+		return true === wp_schedule_event( time() + self::FREQUENCIES[ $frequency ], $frequency, self::CRON_HOOK, array(), true );
+	}
+
+	/**
 	 * Constructor
 	 */
 	public function __construct( Scanner $scanner, Analyzer $analyzer ) {

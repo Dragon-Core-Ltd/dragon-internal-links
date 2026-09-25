@@ -49,11 +49,15 @@ final class AjaxTest extends TestCase {
 		);
 		$GLOBALS['wpdb']->returns['update']  = 1;
 
-		$post                                                = new \stdClass();
+		$post                                                = new \WP_Post();
 		$post->ID                                            = 5;
 		$post->post_content                                  = '<!-- wp:paragraph --><p>Our Coffee Beans Guide is here.</p><!-- /wp:paragraph -->';
 		$GLOBALS['dragoninternallinks_test']['posts'][5]      = $post;
 		$GLOBALS['dragoninternallinks_test']['permalinks'][7] = 'https://example.test/coffee-beans-guide/';
+
+		$target                                           = new \WP_Post();
+		$target->ID                                       = 7;
+		$GLOBALS['dragoninternallinks_test']['posts'][7] = $target;
 	}
 
 	protected function tearDown(): void {
@@ -173,5 +177,58 @@ final class AjaxTest extends TestCase {
 
 		$this->assertTrue( $response->success );
 		$this->assertSame( array( 'status' => 'dismissed' ), $this->status_updates()[0][1] );
+	}
+
+	public function test_completion_message_warns_when_stale_links_could_not_be_removed(): void {
+		$message = new \ReflectionMethod( Ajax::class, 'scan_message' );
+		$message->setAccessible( true );
+
+		$result = array(
+			'complete' => true,
+			'total'    => 3,
+			'offset'   => 3,
+			'pruned'   => false,
+		);
+
+		$this->assertStringContainsString( 'could not be removed', $message->invoke( null, $result, 0 ) );
+
+		$result['pruned'] = true;
+		$this->assertStringNotContainsString( 'could not be removed', $message->invoke( null, $result, 0 ) );
+	}
+
+	/**
+	 * @return iterable<string,array{0:callable}>
+	 */
+	public static function stale_targets(): iterable {
+		yield 'drafted' => array( static fn( \WP_Post $post ) => $post->post_status = 'draft' );
+		yield 'trashed' => array( static fn( \WP_Post $post ) => $post->post_status = 'trash' );
+		yield 'excluded' => array(
+			static function ( \WP_Post $post ) {
+				$GLOBALS['dragoninternallinks_test']['options']['dragoninternallinks_exclude_categories'] = array( 4 );
+				$GLOBALS['dragoninternallinks_test']['terms'][ $post->ID ]['category']                  = array( 4 );
+			},
+		);
+		yield 'type no longer scanned' => array( static fn( \WP_Post $post ) => $post->post_type = 'product' );
+	}
+
+	public function test_apply_refuses_a_source_that_is_no_longer_published(): void {
+		$GLOBALS['dragoninternallinks_test']['posts'][5]->post_status = 'draft';
+
+		$this->assertFalse( $this->apply()->success );
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
+	}
+
+	/**
+	 * @dataProvider stale_targets
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'stale_targets' )]
+	public function test_apply_refuses_a_target_that_has_left_the_scan( callable $change ): void {
+		$change( $GLOBALS['dragoninternallinks_test']['posts'][7] );
+
+		$response = $this->apply();
+
+		$this->assertFalse( $response->success );
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
+		$this->assertSame( array(), $this->status_updates() );
 	}
 }

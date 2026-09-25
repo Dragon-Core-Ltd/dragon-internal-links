@@ -315,7 +315,21 @@ class Admin {
 		}
 
 		if ( isset( $_POST['dragoninternallinks_scan_frequency'] ) ) {
-			update_option( 'dragoninternallinks_scan_frequency', sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_scan_frequency'] ) ) );
+			// Compared with the stored value rather than trusting update_option(),
+			// which returns false for an unchanged value as well as a failed write.
+			$old_frequency = Scheduler::frequency();
+			$new_frequency = Scheduler::sanitize_frequency( sanitize_key( wp_unslash( $_POST['dragoninternallinks_scan_frequency'] ) ) );
+
+			update_option( 'dragoninternallinks_scan_frequency', $new_frequency );
+
+			if ( $new_frequency !== $old_frequency && ! Scheduler::reschedule( $new_frequency ) ) {
+				add_settings_error(
+					'dragoninternallinks_settings',
+					'schedule_failed',
+					__( 'The new scan frequency was saved, but the background scan could not be rescheduled. It will be retried on the next page load.', 'dragon-internal-links' ),
+					'error'
+				);
+			}
 		}
 
 		// AI re-ranking (bring-your-own key).

@@ -19,6 +19,19 @@ class Analyzer {
 	private const KEYWORD_MAX_LENGTH = 255;
 
 	/**
+	 * Throwaway link target for the dry-run insert that confirms a suggestion
+	 * can be applied (the .invalid TLD never resolves).
+	 */
+	private const PROBE_URL = 'https://dragon-internal-links.invalid/probe';
+
+	/**
+	 * Private-use characters that mark where the dry-run link starts and ends
+	 * in the post's text.
+	 */
+	private const PROBE_OPEN  = "\u{E000}";
+	private const PROBE_CLOSE = "\u{E001}";
+
+	/**
 	 * Scanner instance
 	 */
 	private Scanner $scanner;
@@ -39,28 +52,88 @@ class Analyzer {
 	public function get_orphan_posts( int $limit = 50 ): array {
 		global $wpdb;
 
-		$table_stats  = $wpdb->prefix . 'dil_stats';
-		$post_types   = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
-		$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+		$scope = $this->report_scope( 's.inbound_count = 0' );
+		if ( null === $scope ) {
+			return array();
+		}
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); $placeholders is a dynamically generated list of %s placeholders.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); the scope clause is built from fixed fragments and generated placeholders.
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT s.*, p.post_title, p.post_date, p.post_type, p.post_modified
 				 FROM %i s
 				 JOIN {$wpdb->posts} p ON s.post_id = p.ID
-				 WHERE s.inbound_count = 0
-				 AND p.post_status = 'publish'
-				 AND p.post_type IN ({$placeholders})
+				 {$scope['where']}
 				 ORDER BY s.orphan_score DESC
 				 LIMIT %d",
-				...array_merge( array( $table_stats ), $post_types, array( $limit ) )
+				...array_merge( array( $wpdb->prefix . 'dil_stats' ), $scope['args'], array( $limit ) )
 			),
 			ARRAY_A
 		);
 		// phpcs:enable
 
 		return $results ? $results : array();
+	}
+
+	/**
+	 * WHERE clause, joined as "s" (stats) and "p" (posts), for the posts the
+	 * reports cover: the given stats condition, published, a scanned post type,
+	 * and not in an excluded category. Shared by the orphan list, the dashboard
+	 * orphan count and the low-outbound list so they always agree.
+	 *
+	 * @param string $condition      Stats condition, with placeholders.
+	 * @param array  $condition_args Values for the condition's placeholders.
+	 * @param string $alias          Alias of the posts table the scope applies to.
+	 * @return array{where: string, args: array}|null Null when no post type is
+	 *                                               scanned, so nothing matches.
+	 */
+	private function report_scope( string $condition, array $condition_args = array(), string $alias = 'p' ): ?array {
+		global $wpdb;
+
+		$post_types = Scanner::post_types();
+		if ( array() === $post_types ) {
+			return null;
+		}
+
+		$where = "WHERE {$condition}
+				 AND {$alias}.post_status = 'publish'
+				 AND {$alias}.post_type IN (" . implode( ',', array_fill( 0, count( $post_types ), '%s' ) ) . ')';
+		$args  = array_merge( $condition_args, $post_types );
+
+		$excluded = Scanner::excluded_categories();
+		if ( array() !== $excluded ) {
+			$where .= "
+				 AND NOT EXISTS (SELECT 1 FROM {$wpdb->term_relationships} tr
+					JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+					WHERE tr.object_id = {$alias}.ID AND tt.taxonomy = 'category'
+					AND tt.term_id IN (" . implode( ',', array_fill( 0, count( $excluded ), '%d' ) ) . '))';
+			$args   = array_merge( $args, $excluded );
+		}
+
+		return array(
+			'where' => $where,
+			'args'  => $args,
+		);
+	}
+
+	/**
+	 * WHERE clause for pending suggestions, joined as "s" (suggestions), "sp"
+	 * (source post) and "p" (target post): both posts must still be ones the
+	 * reports cover. Shared by the suggestion list and the dashboard count.
+	 *
+	 * @return array{where: string, args: array}|null Null when no post type is scanned.
+	 */
+	private function suggestion_scope(): ?array {
+		$target = $this->report_scope( "s.status = 'pending'" );
+		$source = $this->report_scope( '1 = 1', array(), 'sp' );
+		if ( null === $target || null === $source ) {
+			return null;
+		}
+
+		return array(
+			'where' => $target['where'] . "\n\t\t\t\t AND " . substr( $source['where'], strlen( 'WHERE ' ) ),
+			'args'  => array_merge( $target['args'], $source['args'] ),
+		);
 	}
 
 	/**
@@ -73,22 +146,21 @@ class Analyzer {
 	public function get_low_outbound_posts( int $limit = 50, int $max_outbound = 2 ): array {
 		global $wpdb;
 
-		$table_stats  = $wpdb->prefix . 'dil_stats';
-		$post_types   = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
-		$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+		$scope = $this->report_scope( 's.outbound_count <= %d', array( $max_outbound ) );
+		if ( null === $scope ) {
+			return array();
+		}
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); $placeholders is a dynamically generated list of %s placeholders.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); the scope clause is built from fixed fragments and generated placeholders.
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT s.*, p.post_title, p.post_date, p.post_type
 				 FROM %i s
 				 JOIN {$wpdb->posts} p ON s.post_id = p.ID
-				 WHERE s.outbound_count <= %d
-				 AND p.post_status = 'publish'
-				 AND p.post_type IN ({$placeholders})
+				 {$scope['where']}
 				 ORDER BY s.outbound_count ASC, p.post_date DESC
 				 LIMIT %d",
-				...array_merge( array( $table_stats, $max_outbound ), $post_types, array( $limit ) )
+				...array_merge( array( $wpdb->prefix . 'dil_stats' ), $scope['args'], array( $limit ) )
 			),
 			ARRAY_A
 		);
@@ -140,55 +212,63 @@ class Analyzer {
 			return array();
 		}
 
+		$post_types = Scanner::post_types();
+		if ( array() === $post_types || Scanner::in_excluded_category( $post ) ) {
+			return array();
+		}
+
 		$suggestions = array();
-		$post_types  = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
 		$min_words   = (int) get_option( 'dragoninternallinks_min_word_count', 3 );
 
 		// Get existing outbound links to avoid duplicates
 		$existing_links  = $this->scanner->get_post_links( $post_id );
 		$linked_post_ids = array_column( $existing_links, 'target_post_id' );
 
-		// Get potential target posts (exclude self and already linked)
-		$exclude_ids = array_merge( array( $post_id ), array_map( 'intval', $linked_post_ids ) );
-
-		$targets = get_posts(
-			array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				'posts_per_page' => 100,
-				'exclude'        => $exclude_ids, // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- Admin-side suggestion generation on a bounded result set.
-				'orderby'        => 'date',
-				'order'          => 'DESC',
+		// Get potential target posts: not itself, not already linked, and not one
+		// the owner dismissed for this post (dismissed rows are kept for this).
+		$exclude_ids = array_values(
+			array_unique(
+				array_merge( array( $post_id ), array_map( 'intval', $linked_post_ids ), $this->dismissed_targets( $post_id ) )
 			)
 		);
 
-		$content = strtolower( wp_strip_all_tags( $post->post_content ) );
+		$target_args = array(
+			'post_type'      => $post_types,
+			'post_status'    => 'publish',
+			'posts_per_page' => 100,
+			'exclude'        => $exclude_ids, // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- Admin-side suggestion generation on a bounded result set.
+			'orderby'        => 'date',
+			'order'          => 'DESC',
+		);
+
+		$excluded_categories = Scanner::excluded_categories();
+		if ( array() !== $excluded_categories ) {
+			$target_args['category__not_in'] = $excluded_categories;
+		}
+
+		$targets = get_posts( $target_args );
 
 		foreach ( $targets as $target ) {
 			// Extract keywords from target title
 			$keywords = $this->extract_keywords( $target->post_title, $min_words );
 
 			foreach ( $keywords as $keyword ) {
-				// Check if keyword appears in source content
-				$keyword_lower = strtolower( $keyword );
+				// The keyword must appear as whole words, exactly as the linker
+				// will look for it when the suggestion is applied.
+				$context = $this->find_keyword_context( $post->post_content, $keyword );
 
-				if ( strpos( $content, $keyword_lower ) !== false ) {
-					// Find context around keyword
-					$context = $this->find_keyword_context( $post->post_content, $keyword );
-
-					if ( $context ) {
-						$relevance = $this->calculate_relevance( $keyword, $target, $post );
-
-						$suggestions[] = array(
-							'source_post_id' => $post_id,
-							'target_post_id' => $target->ID,
-							'keyword'        => $keyword,
-							'context'        => $context,
-							'relevance'      => $relevance,
-							'target_title'   => $target->post_title,
-						);
-					}
+				if ( null === $context || '' === $context ) {
+					continue;
 				}
+
+				$suggestions[] = array(
+					'source_post_id' => $post_id,
+					'target_post_id' => $target->ID,
+					'keyword'        => $keyword,
+					'context'        => $context,
+					'relevance'      => $this->calculate_relevance( $keyword, $target, $post ),
+					'target_title'   => $target->post_title,
+				);
 			}
 		}
 
@@ -219,6 +299,27 @@ class Analyzer {
 	}
 
 	/**
+	 * Targets the owner has dismissed as suggestions for a source post.
+	 *
+	 * @param int $post_id Source post ID.
+	 * @return int[]
+	 */
+	private function dismissed_targets( int $post_id ): array {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT target_post_id FROM %i WHERE source_post_id = %d AND status = 'dismissed'",
+				$wpdb->prefix . 'dil_suggestions',
+				$post_id
+			)
+		);
+
+		return array_map( 'intval', (array) $ids );
+	}
+
+	/**
 	 * Generate suggestions for a batch of posts (resumable).
 	 *
 	 * Processes one offset-based page so every post is eventually covered, not
@@ -245,10 +346,14 @@ class Analyzer {
 			$stale = false === $wpdb->delete( $table, array( 'status' => 'pending' ), array( '%s' ) );
 		}
 
-		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
+		$post_types = Scanner::post_types();
 
-		$query = new \WP_Query(
-			array(
+		if ( array() === $post_types ) {
+			// An empty post_type would make WP_Query fall back to "post".
+			$ids   = array();
+			$total = 0;
+		} else {
+			$args = array(
 				'post_type'      => $post_types,
 				'post_status'    => 'publish',
 				'posts_per_page' => $batch_size,
@@ -256,11 +361,18 @@ class Analyzer {
 				'orderby'        => 'ID',
 				'order'          => 'ASC',
 				'fields'         => 'ids',
-			)
-		);
+			);
 
-		$ids       = array_map( 'intval', $query->posts );
-		$total     = (int) $query->found_posts;
+			$excluded = Scanner::excluded_categories();
+			if ( array() !== $excluded ) {
+				$args['category__not_in'] = $excluded;
+			}
+
+			$query = new \WP_Query( $args );
+			$ids   = array_map( 'intval', $query->posts );
+			$total = (int) $query->found_posts;
+		}
+
 		$generated = 0;
 		$failed    = 0;
 
@@ -395,11 +507,13 @@ class Analyzer {
 			$keywords[] = self::cap_keyword( $clean_title );
 		}
 
-		// Also try shorter meaningful phrases
-		$meaningful_words = array_filter( $words, fn( $w ) => ! in_array( strtolower( $w ), $stop_words, true ) && strlen( $w ) > 2 );
+		// Also try a shorter phrase of the title's meaningful words, held to the
+		// same Minimum Keyword Words setting as the full title.
+		$meaningful_words = array_values( array_filter( $words, fn( $w ) => ! in_array( strtolower( $w ), $stop_words, true ) && strlen( $w ) > 2 ) );
+		$phrase_words     = array_slice( $meaningful_words, 0, max( 3, $min_words ) );
 
-		if ( count( $meaningful_words ) >= 2 ) {
-			$keywords[] = self::cap_keyword( implode( ' ', array_slice( $meaningful_words, 0, 3 ) ) );
+		if ( count( $phrase_words ) >= max( 1, $min_words ) ) {
+			$keywords[] = self::cap_keyword( implode( ' ', $phrase_words ) );
 		}
 
 		return array_values( array_unique( array_filter( $keywords, fn( $k ) => '' !== $k ) ) );
@@ -431,24 +545,57 @@ class Analyzer {
 	/**
 	 * Find context around keyword in content
 	 *
+	 * The occurrence is the one Linker::insert() links when the suggestion is
+	 * applied, found by a dry-run insert, so nothing is suggested that apply
+	 * refuses (a phrase split by an inline tag or a line break, text already
+	 * inside a link, a caption or a shortcode tag).
+	 *
 	 * @param string $content HTML content
 	 * @param string $keyword Keyword to find
 	 * @return string|null Context sentence or null
 	 */
 	private function find_keyword_context( string $content, string $keyword ): ?string {
-		$text          = wp_strip_all_tags( $content );
-		$keyword_lower = strtolower( $keyword );
-		$text_lower    = strtolower( $text );
-
-		$pos = strpos( $text_lower, $keyword_lower );
-
-		if ( false === $pos ) {
+		if ( '' === trim( $keyword ) ) {
 			return null;
 		}
 
+		// Cheap rejection first: the joined text holds every occurrence the
+		// linker could link, and more (also false on invalid UTF-8).
+		if ( 1 !== preg_match( Linker::keyword_pattern( $keyword ), Linker::matchable_text( $content ) ) ) {
+			return null;
+		}
+
+		$linked = ( new Linker() )->insert( $content, $keyword, self::PROBE_URL );
+		if ( null === $linked ) {
+			return null;
+		}
+
+		$linked   = str_replace( array( self::PROBE_OPEN, self::PROBE_CLOSE ), '', $linked );
+		$open_tag = '<a href="' . esc_url( self::PROBE_URL ) . '">';
+		$open_at  = strpos( $linked, $open_tag );
+		$close_at = false === $open_at ? false : strpos( $linked, '</a>', $open_at + strlen( $open_tag ) );
+		if ( false === $open_at || false === $close_at ) {
+			return null;
+		}
+
+		$inner  = $open_at + strlen( $open_tag );
+		$marked = substr( $linked, 0, $open_at ) . self::PROBE_OPEN
+			. substr( $linked, $inner, $close_at - $inner ) . self::PROBE_CLOSE
+			. substr( $linked, $close_at + strlen( '</a>' ) );
+
+		$text  = Linker::matchable_text( $marked );
+		$pos   = strpos( $text, self::PROBE_OPEN );
+		$after = strpos( $text, self::PROBE_CLOSE );
+		if ( false === $pos || false === $after || $after < $pos ) {
+			return null;
+		}
+
+		$match = substr( $text, $pos + strlen( self::PROBE_OPEN ), $after - $pos - strlen( self::PROBE_OPEN ) );
+		$text  = str_replace( array( self::PROBE_OPEN, self::PROBE_CLOSE ), '', $text );
+
 		// Extract surrounding text (about 150 chars each side)
 		$start  = max( 0, $pos - 100 );
-		$length = strlen( $keyword ) + 200;
+		$length = strlen( $match ) + 200;
 
 		$context = substr( $text, $start, $length );
 
@@ -552,23 +699,31 @@ class Analyzer {
 
 		$table = $wpdb->prefix . 'dil_suggestions';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+		// Only suggestions whose target and source are still published, scanned,
+		// not excluded posts: a target drafted, trashed or excluded since would
+		// link to a ?p= or __trashed URL, and an excluded source is off limits.
+		$scope = $this->suggestion_scope();
+		if ( null === $scope ) {
+			return array();
+		}
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); the scope clause is built from fixed fragments and generated placeholders.
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT s.*,
 						sp.post_title as source_title,
-						tp.post_title as target_title
+						p.post_title as target_title
 				 FROM %i s
 				 JOIN {$wpdb->posts} sp ON s.source_post_id = sp.ID
-				 JOIN {$wpdb->posts} tp ON s.target_post_id = tp.ID
-				 WHERE s.status = 'pending'
+				 JOIN {$wpdb->posts} p ON s.target_post_id = p.ID
+				 {$scope['where']}
 				 ORDER BY s.relevance_score DESC
 				 LIMIT %d",
-				$table,
-				$limit
+				...array_merge( array( $table ), $scope['args'], array( $limit ) )
 			),
 			ARRAY_A
 		);
+		// phpcs:enable
 
 		return $results ? $results : array();
 	}
@@ -618,6 +773,33 @@ class Analyzer {
 	}
 
 	/**
+	 * Number of orphans, counted with exactly the filter the orphan list uses.
+	 *
+	 * @return int
+	 */
+	private function count_orphans(): int {
+		global $wpdb;
+
+		$scope = $this->report_scope( 's.inbound_count = 0' );
+		if ( null === $scope ) {
+			return 0;
+		}
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); the scope clause is built from fixed fragments and generated placeholders.
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM %i s
+				 JOIN {$wpdb->posts} p ON s.post_id = p.ID
+				 {$scope['where']}",
+				...array_merge( array( $wpdb->prefix . 'dil_stats' ), $scope['args'] )
+			)
+		);
+		// phpcs:enable
+
+		return (int) $count;
+	}
+
+	/**
 	 * Get summary statistics
 	 *
 	 * @return array Stats
@@ -629,15 +811,47 @@ class Analyzer {
 		$table_stats       = $wpdb->prefix . 'dil_stats';
 		$table_suggestions = $wpdb->prefix . 'dil_suggestions';
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin tables; no core API or cache available.
-		$total_links         = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table_links ) );
-		$total_posts         = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table_stats ) );
-		$orphan_posts        = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE inbound_count = 0', $table_stats ) );
-		$pending_suggestions = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE status = 'pending'", $table_suggestions ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin tables (no core API/cache); the scope clauses are built from fixed fragments and generated placeholders.
+		$total_links  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table_links ) );
+		$orphan_posts = $this->count_orphans();
 
-		$avg_inbound  = (float) $wpdb->get_var( $wpdb->prepare( 'SELECT AVG(inbound_count) FROM %i', $table_stats ) );
-		$avg_outbound = (float) $wpdb->get_var( $wpdb->prepare( 'SELECT AVG(outbound_count) FROM %i', $table_stats ) );
+		// Posts scanned and the averages cover exactly the posts the orphan
+		// count and the reports cover.
+		$totals = null;
+		$scope  = $this->report_scope( '1 = 1' );
+		if ( null !== $scope ) {
+			$totals = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT COUNT(*) AS posts, AVG(s.inbound_count) AS avg_in, AVG(s.outbound_count) AS avg_out
+					 FROM %i s
+					 JOIN {$wpdb->posts} p ON s.post_id = p.ID
+					 {$scope['where']}",
+					...array_merge( array( $table_stats ), $scope['args'] )
+				),
+				ARRAY_A
+			);
+		}
+		$totals = is_array( $totals ) ? $totals : array();
+
+		// Pending suggestions, counted with the filter the list uses.
+		$pending_suggestions = 0;
+		$scope               = $this->suggestion_scope();
+		if ( null !== $scope ) {
+			$pending_suggestions = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM %i s
+					 JOIN {$wpdb->posts} sp ON s.source_post_id = sp.ID
+					 JOIN {$wpdb->posts} p ON s.target_post_id = p.ID
+					 {$scope['where']}",
+					...array_merge( array( $table_suggestions ), $scope['args'] )
+				)
+			);
+		}
 		// phpcs:enable
+
+		$total_posts  = (int) ( $totals['posts'] ?? 0 );
+		$avg_inbound  = (float) ( $totals['avg_in'] ?? 0 );
+		$avg_outbound = (float) ( $totals['avg_out'] ?? 0 );
 
 		$broken_links = count( $this->scanner->find_broken_links() );
 

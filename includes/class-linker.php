@@ -44,6 +44,25 @@ class Linker {
 	private const RAW_TEXT_TAGS = array( 'script', 'style', 'textarea', 'title' );
 
 	/**
+	 * Inline elements whose tags do not separate words: "cat<strong>egory</strong>"
+	 * reads as one word, so "cat" must not be linked inside it. Every other tag
+	 * (a paragraph, a line break, an image) ends a word.
+	 */
+	private const INLINE_TAGS = array( 'a', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'data', 'del', 'dfn', 'em', 'i', 'ins', 'kbd', 'mark', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr' );
+
+	/**
+	 * Shortcodes whose content is a caption. Captions are never linked, the same
+	 * as a block's <figcaption>.
+	 */
+	private const CAPTION_SHORTCODES = array( 'caption', 'wp_caption' );
+
+	/**
+	 * A tag's attribute section, with quoted values (which may hold ">") kept
+	 * whole. Used by matchable_text() only.
+	 */
+	private const TAG_BODY = '(?:[^>"\']|"[^"]*"|\'[^\']*\')*';
+
+	/**
 	 * Characters that end an HTML tag name.
 	 */
 	private const TAG_NAME_END = " \t\n\r\f/>";
@@ -112,6 +131,134 @@ class Linker {
 	private bool $regex_failed = false;
 
 	/**
+	 * Pattern matching the opening or closing tag of any registered shortcode
+	 * ('' when none is registered), built once per insert().
+	 *
+	 * @var string
+	 */
+	private string $shortcode_pattern = '';
+
+	/**
+	 * Characters that make up a word, for keyword boundaries. PCRE's \b only
+	 * knows ASCII letters, so it would find "café" inside "cafés".
+	 */
+	private const WORD_CHARS = '\p{L}\p{N}\p{M}_';
+
+	/**
+	 * Case-insensitive pattern that matches a keyword only as whole words.
+	 *
+	 * A boundary is required only on a side where the keyword itself starts or
+	 * ends with a word character (as \b behaves), so "C++" still matches before
+	 * other text. On the left an "&" also blocks the match, so a keyword never
+	 * matches inside an entity such as "&amp;". Shared by the analyzer, which
+	 * decides what to suggest, so it only suggests what this class can link.
+	 *
+	 * @param string $keyword Keyword (valid UTF-8).
+	 * @return string
+	 */
+	public static function keyword_pattern( string $keyword ): string {
+		$is_word = static fn( string $char ): bool => 1 === preg_match( '/^[' . self::WORD_CHARS . ']$/u', $char );
+
+		$left  = $is_word( mb_substr( $keyword, 0, 1 ) ) ? '(?<![' . self::WORD_CHARS . '&])' : '';
+		$right = $is_word( mb_substr( $keyword, -1 ) ) ? '(?![' . self::WORD_CHARS . '])' : '';
+
+		return '/' . $left . preg_quote( $keyword, '/' ) . $right . '/iu';
+	}
+
+	/**
+	 * Whether a keyword starts and ends with a word character, i.e. which sides
+	 * of it need a word boundary (see keyword_pattern()).
+	 *
+	 * @param string $keyword Keyword (valid UTF-8).
+	 * @return array{0:bool,1:bool} Left, right.
+	 */
+	private static function keyword_edges( string $keyword ): array {
+		return array(
+			self::is_word_char( mb_substr( $keyword, 0, 1 ) ),
+			self::is_word_char( mb_substr( $keyword, -1 ) ),
+		);
+	}
+
+	/**
+	 * Whether a single character is a word character.
+	 *
+	 * @param string $char One character (UTF-8).
+	 * @return bool
+	 */
+	private static function is_word_char( string $char ): bool {
+		return '' !== $char && 1 === preg_match( '/^[' . self::WORD_CHARS . ']$/u', $char );
+	}
+
+	/**
+	 * Pattern for the opening or closing tag of a registered shortcode, as the
+	 * tag part of get_shortcode_regex() matches it. Its attribute text is never
+	 * linked: a link there would break the shortcode.
+	 *
+	 * @return string '' when no shortcode is registered (an empty alternation
+	 *                would match every "[").
+	 */
+	public static function shortcode_tag_pattern(): string {
+		global $shortcode_tags;
+
+		if ( empty( $shortcode_tags ) || ! is_array( $shortcode_tags ) ) {
+			return '';
+		}
+
+		$names = array_map(
+			static fn( $name ): string => preg_quote( (string) $name, '/' ),
+			array_keys( $shortcode_tags )
+		);
+
+		return '/\[(\/?)(' . implode( '|', $names ) . ')(?![\w-])[^\]]*\]/';
+	}
+
+	/**
+	 * The post's text as a reader sees it, for the analyzer's suggestion
+	 * context and a quick first check. Every occurrence insert() can link is in
+	 * this text, but not every occurrence here can be linked (a phrase split by
+	 * an inline tag or a line break reads as one here), so only insert() decides
+	 * whether a keyword can be applied.
+	 *
+	 * Captions (<figcaption> and the caption shortcode), shortcode tags,
+	 * scripts, styles and comments are left out, inline tags join the text on
+	 * either side (so "cat<strong>egory</strong>" reads "category"), and every
+	 * other tag separates it.
+	 *
+	 * @param string $content Post content.
+	 * @return string
+	 */
+	public static function matchable_text( string $content ): string {
+		$steps = array(
+			'@<(script|style)\b[^>]*?>.*?</\1>@si' => ' ',
+			'@<!--.*?-->@s'                        => ' ',
+			'@<figcaption\b.*?</figcaption>@si'    => ' ',
+			'/\[(' . implode( '|', self::CAPTION_SHORTCODES ) . ')(?![\w-])[^\]]*\].*?\[\/\1\]/si' => ' ',
+		);
+
+		$shortcodes = self::shortcode_tag_pattern();
+		if ( '' !== $shortcodes ) {
+			$steps[ $shortcodes ] = ' ';
+		}
+
+		$steps[ '@</?(?:' . implode( '|', self::INLINE_TAGS ) . ')(?![\w-])' . self::TAG_BODY . '>@i' ] = '';
+		$steps[ '@</?[a-zA-Z]' . self::TAG_BODY . '>@' ] = ' ';
+
+		$text = $content;
+		foreach ( $steps as $pattern => $replacement ) {
+			$next = preg_replace( $pattern, $replacement, $text );
+			if ( ! is_string( $next ) ) {
+				return wp_strip_all_tags( $content );
+			}
+			$text = $next;
+		}
+
+		$text = wp_strip_all_tags( $text );
+		$text = preg_replace( '/[ \t\r\n]+/', ' ', $text );
+
+		return is_string( $text ) ? trim( $text ) : '';
+	}
+
+	/**
 	 * Whether the last insert() failed because a regex operation did.
 	 *
 	 * @return bool
@@ -142,9 +289,10 @@ class Linker {
 			return null;
 		}
 
-		$done   = false;
-		$state  = $this->new_state();
-		$blocks = parse_blocks( $content );
+		$done                    = false;
+		$state                   = $this->new_state();
+		$blocks                  = parse_blocks( $content );
+		$this->shortcode_pattern = self::shortcode_tag_pattern();
 
 		foreach ( $blocks as $i => $block ) {
 			$blocks[ $i ] = $this->walk_block( $block, $keyword, $url, $done, $state );
@@ -205,17 +353,22 @@ class Linker {
 	 * Fresh traversal state.
 	 *
 	 * "anchor" is the depth of open <a> elements (text is only linkable at
-	 * depth 0), "raw" is the name of the open raw-text element, if any, and
+	 * depth 0), "raw" is the name of the open raw-text element, if any,
 	 * "broken" is set once a chunk has ended inside a tag, after which nothing
-	 * is linkable.
+	 * is linkable, "caption" is the depth of open captions (<figcaption> or the
+	 * caption shortcode), whose text is never linked, and "glue" is whether the
+	 * text so far ends in a word character with only inline tags since, so the
+	 * next text run continues that word.
 	 *
-	 * @return array{anchor:int,raw:string,broken:bool}
+	 * @return array{anchor:int,raw:string,broken:bool,caption:int,glue:bool}
 	 */
 	private function new_state(): array {
 		return array(
-			'anchor' => 0,
-			'raw'    => '',
-			'broken' => false,
+			'anchor'  => 0,
+			'raw'     => '',
+			'broken'  => false,
+			'caption' => 0,
+			'glue'    => false,
 		);
 	}
 
@@ -311,7 +464,8 @@ class Linker {
 	 */
 	private function link_in_html( string $html, string $keyword, string $url, bool &$done, array &$state ): string {
 		$length     = strlen( $html );
-		$pattern    = '/' . preg_quote( $keyword, '/' ) . '/iu';
+		$pattern    = self::keyword_pattern( $keyword );
+		$edges      = self::keyword_edges( $keyword );
 		$offset     = 0;
 		$text_start = 0;
 
@@ -325,9 +479,10 @@ class Linker {
 				}
 				// The state is cleared before the offset moves, so a close tag
 				// sitting at the current offset cannot loop.
-				$state['raw'] = '';
-				$offset       = $close;
-				$text_start   = $close;
+				$state['raw']  = '';
+				$state['glue'] = false;
+				$offset        = $close;
+				$text_start    = $close;
 				continue;
 			}
 
@@ -344,7 +499,7 @@ class Linker {
 				continue;
 			}
 
-			$linked = $this->link_in_text( $html, $text_start, $next_lt, $state, $pattern, $url, $done );
+			$linked = $this->link_in_text( $html, $text_start, $next_lt, $state, $pattern, $edges, $url, $done );
 			if ( null !== $linked ) {
 				return $linked;
 			}
@@ -357,51 +512,175 @@ class Linker {
 			$text_start = $token['end'];
 		}
 
-		$linked = $this->link_in_text( $html, $text_start, $length, $state, $pattern, $url, $done );
+		$linked = $this->link_in_text( $html, $text_start, $length, $state, $pattern, $edges, $url, $done );
 
 		return null === $linked ? $html : $linked;
 	}
 
 	/**
-	 * Replace the first keyword occurrence inside one text run.
+	 * Replace the first linkable keyword occurrence inside one text run.
+	 *
+	 * A match is linkable when it lies outside shortcode tags and captions, and
+	 * does not continue a word across an inline tag on either side (the
+	 * pattern's own boundaries only see this run). The run also updates the
+	 * caption and glue state for the runs after it.
 	 *
 	 * @param string              $html    Whole chunk.
 	 * @param int                 $start   Start offset of the text run.
 	 * @param int                 $end     End offset of the text run, exclusive.
-	 * @param array<string,mixed> $state   Traversal state.
+	 * @param array<string,mixed> $state   Traversal state (by reference).
 	 * @param string              $pattern Compiled keyword pattern.
+	 * @param array{0:bool,1:bool} $edges  Whether the keyword starts / ends with a word character.
 	 * @param string              $url     Link target.
 	 * @param bool                $done    Set true when a replacement was made (by reference).
 	 * @return string|null The chunk with the link spliced in, or null when this
 	 *                     run held no match or PCRE failed (see regex_failed()).
 	 */
-	private function link_in_text( string $html, int $start, int $end, array $state, string $pattern, string $url, bool &$done ): ?string {
-		if ( $end <= $start || $state['anchor'] > 0 || $state['broken'] ) {
+	private function link_in_text( string $html, int $start, int $end, array &$state, string $pattern, array $edges, string $url, bool &$done ): ?string {
+		if ( $end <= $start ) {
 			return null;
 		}
 
-		$replaced = preg_replace_callback(
-			$pattern,
-			static function ( array $matches ) use ( $url ): string {
-				return '<a href="' . esc_url( $url ) . '">' . $matches[0] . '</a>';
-			},
-			substr( $html, $start, $end - $start ),
-			1,
-			$count
-		);
+		$text      = substr( $html, $start, $end - $start );
+		$glue_in   = $state['glue'];
+		$linkable  = $this->linkable_spans( $text, $state );
+		$ends_word = 1 === preg_match( '/[' . self::WORD_CHARS . ']\z/u', $text );
 
-		if ( ! is_string( $replaced ) ) {
+		$state['glue'] = $ends_word;
+
+		if ( null === $linkable ) {
+			return null;
+		}
+
+		if ( array() === $linkable || $state['anchor'] > 0 || $state['broken'] ) {
+			return null;
+		}
+
+		if ( false === preg_match_all( $pattern, $text, $matches, PREG_OFFSET_CAPTURE ) ) {
 			$this->regex_failed = true;
 			return null;
 		}
 
-		if ( 0 === $count ) {
-			return null;
+		foreach ( $matches[0] as $match ) {
+			$from = (int) $match[1];
+			$to   = $from + strlen( $match[0] );
+
+			if ( ! self::within_spans( $from, $to, $linkable ) ) {
+				continue;
+			}
+
+			// The word carries on from the text before an inline tag.
+			if ( 0 === $from && $edges[0] && $glue_in ) {
+				continue;
+			}
+
+			// The word carries on into the text after an inline tag.
+			if ( strlen( $text ) === $to && $edges[1] && $this->word_follows( $html, $end ) ) {
+				continue;
+			}
+
+			$done = true;
+
+			return substr( $html, 0, $start + $from )
+				. '<a href="' . esc_url( $url ) . '">' . $match[0] . '</a>'
+				. substr( $html, $start + $to );
 		}
 
-		$done = true;
+		return null;
+	}
 
-		return substr( $html, 0, $start ) . $replaced . substr( $html, $end );
+	/**
+	 * The parts of a text run that may be linked: outside shortcode tags and
+	 * outside captions. Updates the caption depth as caption shortcodes open
+	 * and close.
+	 *
+	 * @param string              $text  Text run.
+	 * @param array<string,mixed> $state Traversal state (by reference).
+	 * @return array<int,array{0:int,1:int}>|null [from, to) offsets, or null when PCRE failed.
+	 */
+	private function linkable_spans( string $text, array &$state ): ?array {
+		$tags = array();
+
+		if ( '' !== $this->shortcode_pattern ) {
+			if ( false === preg_match_all( $this->shortcode_pattern, $text, $found, PREG_SET_ORDER | PREG_OFFSET_CAPTURE ) ) {
+				$this->regex_failed = true;
+				return null;
+			}
+			$tags = $found;
+		}
+
+		$spans  = array();
+		$cursor = 0;
+
+		foreach ( $tags as $tag ) {
+			$at = (int) $tag[0][1];
+			if ( 0 === $state['caption'] && $at > $cursor ) {
+				$spans[] = array( $cursor, $at );
+			}
+
+			if ( in_array( strtolower( $tag[2][0] ), self::CAPTION_SHORTCODES, true ) ) {
+				if ( '/' === $tag[1][0] ) {
+					$state['caption'] = max( 0, $state['caption'] - 1 );
+				} else {
+					++$state['caption'];
+				}
+			}
+
+			$cursor = $at + strlen( $tag[0][0] );
+		}
+
+		if ( 0 === $state['caption'] && strlen( $text ) > $cursor ) {
+			$spans[] = array( $cursor, strlen( $text ) );
+		}
+
+		return $spans;
+	}
+
+	/**
+	 * Whether [from, to) lies inside one of the spans.
+	 *
+	 * @param int                           $from  Start offset.
+	 * @param int                           $to    End offset, exclusive.
+	 * @param array<int,array{0:int,1:int}> $spans Spans.
+	 * @return bool
+	 */
+	private static function within_spans( int $from, int $to, array $spans ): bool {
+		foreach ( $spans as $span ) {
+			if ( $from >= $span[0] && $to <= $span[1] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the text that follows an offset, past any inline tags and
+	 * comments, starts with a word character.
+	 *
+	 * @param string $html Chunk.
+	 * @param int    $at   Offset just past a text run.
+	 * @return bool
+	 */
+	private function word_follows( string $html, int $at ): bool {
+		$length = strlen( $html );
+
+		while ( $at < $length && '<' === $html[ $at ] ) {
+			$token = $this->markup_token( $html, $at );
+			if ( null === $token ) {
+				// A "<" that is ordinary text, not a word character.
+				return false;
+			}
+			if ( 'other' !== $token['kind'] && ! ( 'tag' === $token['kind'] && in_array( $token['tag'], self::INLINE_TAGS, true ) ) ) {
+				return false;
+			}
+			$at = $token['end'];
+		}
+
+		if ( $at >= $length ) {
+			return false;
+		}
+
+		return 1 === preg_match( '/^[' . self::WORD_CHARS . ']/u', substr( $html, $at, 4 ) );
 	}
 
 	/**
@@ -651,12 +930,25 @@ class Linker {
 
 		$tag = $token['tag'];
 
+		// Only inline formatting keeps a word going across a tag.
+		if ( ! in_array( $tag, self::INLINE_TAGS, true ) ) {
+			$state['glue'] = false;
+		}
+
 		if ( $token['closing'] ) {
 			// Clamped at zero so a stray "</a>" cannot make later text inside a
 			// real anchor look linkable.
 			if ( 'a' === $tag && $state['anchor'] > 0 ) {
 				--$state['anchor'];
 			}
+			if ( 'figcaption' === $tag && $state['caption'] > 0 ) {
+				--$state['caption'];
+			}
+			return;
+		}
+
+		if ( 'figcaption' === $tag ) {
+			++$state['caption'];
 			return;
 		}
 

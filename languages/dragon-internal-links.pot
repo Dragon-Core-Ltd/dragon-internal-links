@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-24T17:37:59+00:00\n"
+"POT-Creation-Date: 2026-09-25T00:31:17+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.11.0\n"
 "X-Domain: dragon-internal-links\n"
@@ -283,7 +283,7 @@ msgid "Minimum Keyword Words"
 msgstr ""
 
 #: admin/views/settings.php:120
-msgid "Minimum number of words in a keyword phrase for suggestions. Higher = more specific matches."
+msgid "Minimum number of words in a keyword phrase for suggestions, for both the full title and the shorter phrase taken from its main words. Higher = more specific matches."
 msgstr ""
 
 #: admin/views/settings.php:126
@@ -291,7 +291,7 @@ msgid "Exclude Categories"
 msgstr ""
 
 #: admin/views/settings.php:143
-msgid "Posts in these categories will be excluded from scanning."
+msgid "Posts in these categories are excluded from scanning, from link suggestions (as source or target) and from the orphan reports."
 msgstr ""
 
 #: admin/views/settings.php:151
@@ -393,11 +393,11 @@ msgstr ""
 
 #: includes/class-admin.php:67
 #: includes/class-ajax.php:54
-#: includes/class-ajax.php:123
-#: includes/class-ajax.php:160
-#: includes/class-ajax.php:221
-#: includes/class-ajax.php:248
-#: includes/class-ajax.php:281
+#: includes/class-ajax.php:127
+#: includes/class-ajax.php:164
+#: includes/class-ajax.php:225
+#: includes/class-ajax.php:252
+#: includes/class-ajax.php:293
 msgid "Permission denied."
 msgstr ""
 
@@ -441,15 +441,19 @@ msgstr ""
 msgid "Deleted"
 msgstr ""
 
-#: includes/class-admin.php:348
+#: includes/class-admin.php:329
+msgid "The new scan frequency was saved, but the background scan could not be rescheduled. It will be retried on the next page load."
+msgstr ""
+
+#: includes/class-admin.php:362
 msgid "Settings saved."
 msgstr ""
 
-#: includes/class-admin.php:355
+#: includes/class-admin.php:369
 msgid "Links"
 msgstr ""
 
-#: includes/class-admin.php:389
+#: includes/class-admin.php:403
 msgid "Inbound / Outbound links"
 msgstr ""
 
@@ -472,89 +476,97 @@ msgid_plural "%s posts could not be indexed and keep their previous links."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-ajax.php:129
+#: includes/class-ajax.php:114
+msgid "Links from posts that are no longer published, scanned or included could not be removed, so some link counts may be too high. Run the scan again."
+msgstr ""
+
+#: includes/class-ajax.php:133
 msgid "Invalid post ID."
 msgstr ""
 
-#: includes/class-ajax.php:138
+#: includes/class-ajax.php:142
 msgid "The links could not be saved, so the index is unchanged. Please try again."
 msgstr ""
 
 #. translators: %s: number of internal links found.
-#: includes/class-ajax.php:146
+#: includes/class-ajax.php:150
 msgid "Found %s internal link."
 msgid_plural "Found %s internal links."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: total posts analyzed for link suggestions.
-#: includes/class-ajax.php:174
+#: includes/class-ajax.php:178
 msgid "Done - analyzed %s post for link suggestions."
 msgid_plural "Done - analyzed %s posts for link suggestions."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: posts processed so far, 2: total posts.
-#: includes/class-ajax.php:179
+#: includes/class-ajax.php:183
 msgid "Generating... %1$s / %2$s"
 msgstr ""
 
 #. translators: %s: number of suggestions that could not be saved.
-#: includes/class-ajax.php:187
+#: includes/class-ajax.php:191
 msgid "%s suggestion could not be saved."
 msgid_plural "%s suggestions could not be saved."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-ajax.php:198
+#: includes/class-ajax.php:202
 msgid "Previous suggestions could not be cleared first, so the list may mix this run with an earlier one."
 msgstr ""
 
-#: includes/class-ajax.php:227
-#: includes/class-ajax.php:254
+#: includes/class-ajax.php:231
+#: includes/class-ajax.php:258
 msgid "Invalid suggestion ID."
 msgstr ""
 
-#: includes/class-ajax.php:231
+#: includes/class-ajax.php:235
 msgid "The suggestion could not be updated. Please try again."
 msgstr ""
 
-#: includes/class-ajax.php:236
+#: includes/class-ajax.php:240
 msgid "Suggestion dismissed."
 msgstr ""
 
-#: includes/class-ajax.php:267
+#: includes/class-ajax.php:271
 msgid "Suggestion not found."
 msgstr ""
 
-#: includes/class-ajax.php:274
+#: includes/class-ajax.php:278
 msgid "Post not found."
 msgstr ""
 
-#: includes/class-ajax.php:290
+#: includes/class-ajax.php:286
+msgid "This suggestion is out of date: its post or the page it links to is no longer published or is excluded from linking, so no change was made. Regenerate suggestions to refresh the list."
+msgstr ""
+
+#: includes/class-ajax.php:302
 msgid "The post content could not be processed, so no change was made."
 msgstr ""
 
-#: includes/class-ajax.php:294
+#: includes/class-ajax.php:306
 msgid "Could not find keyword in content."
 msgstr ""
 
-#: includes/class-ajax.php:298
+#: includes/class-ajax.php:310
 msgid "The post could not be saved, so no change was made."
 msgstr ""
 
-#: includes/class-ajax.php:303
+#: includes/class-ajax.php:315
 msgid "The link was added, but the suggestion could not be marked as applied. Refresh the page."
 msgstr ""
 
-#: includes/class-ajax.php:311
+#: includes/class-ajax.php:323
 msgid "Link added successfully!"
 msgstr ""
 
-#: includes/class-scheduler.php:123
+#: includes/class-scheduler.php:170
 msgid "Never"
 msgstr ""
 
-#: includes/class-scheduler.php:135
+#: includes/class-scheduler.php:182
 msgid "Not scheduled"
 msgstr ""

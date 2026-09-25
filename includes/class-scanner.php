@@ -19,6 +19,11 @@ class Scanner {
 	private string $site_url;
 
 	/**
+	 * Longest link URL the links table stores (link_url is varchar(500)).
+	 */
+	private const LINK_URL_MAX_LENGTH = 500;
+
+	/**
 	 * Whether the last scan_post() could not replace the post's index.
 	 *
 	 * @var bool
@@ -37,9 +42,61 @@ class Scanner {
 	 * Initialize hooks
 	 */
 	private function init_hooks(): void {
-		add_action( 'save_post', array( $this, 'on_post_save' ), 20, 2 );
+		// wp_after_insert_post, not save_post: the block editor saves through the
+		// REST API, which writes the post (firing save_post) BEFORE it saves the
+		// categories, so at save_post the excluded-category check sees the old
+		// terms. wp_after_insert_post fires once terms and meta are saved.
+		add_action( 'wp_after_insert_post', array( $this, 'on_post_save' ), 20, 2 );
+		add_action( 'transition_post_status', array( $this, 'on_status_change' ), 10, 3 );
 		add_action( 'wp_trash_post', array( $this, 'on_post_trash' ) );
 		add_action( 'untrash_post', array( $this, 'on_post_untrash' ) );
+		add_action( 'before_delete_post', array( $this, 'on_post_delete' ) );
+	}
+
+	/**
+	 * Post types the plugin scans (Settings > Post Types).
+	 *
+	 * @return string[]
+	 */
+	public static function post_types(): array {
+		return array_values( array_filter( array_map( 'strval', (array) get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) ) ) ) );
+	}
+
+	/**
+	 * Category IDs whose posts are left out of scanning, suggestions and the
+	 * orphan reports (Settings > Exclude Categories).
+	 *
+	 * @return int[]
+	 */
+	public static function excluded_categories(): array {
+		return array_values( array_unique( array_filter( array_map( 'absint', (array) get_option( 'dragoninternallinks_exclude_categories', array() ) ) ) ) );
+	}
+
+	/**
+	 * Whether a post sits in one of the excluded categories.
+	 *
+	 * @param \WP_Post|int $post Post or post ID.
+	 * @return bool
+	 */
+	public static function in_excluded_category( $post ): bool {
+		$excluded = self::excluded_categories();
+
+		return array() !== $excluded && has_term( $excluded, 'category', $post );
+	}
+
+	/**
+	 * Whether a post is in the plugin's scope: published, of a scanned type and
+	 * not in an excluded category. Only such posts are indexed, reported on or
+	 * offered as link targets.
+	 *
+	 * @param \WP_Post|null $post Post.
+	 * @return bool
+	 */
+	public static function in_scope( $post ): bool {
+		return $post instanceof \WP_Post
+			&& 'publish' === $post->post_status
+			&& in_array( $post->post_type, self::post_types(), true )
+			&& ! self::in_excluded_category( $post );
 	}
 
 	/**
@@ -51,19 +108,27 @@ class Scanner {
 	public function scan_post( int $post_id ): array {
 		$post = get_post( $post_id );
 
-		if ( ! $post || 'publish' !== $post->post_status ) {
+		$this->scan_failed = false;
+
+		if ( ! $post ) {
 			return array();
 		}
 
-		// Check if post type should be scanned
-		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
-		if ( ! in_array( $post->post_type, $post_types, true ) ) {
+		// Other post types are never indexed, so there is nothing to remove. (A
+		// type taken off the list is pruned at the start of the next full scan.)
+		if ( ! in_array( $post->post_type, self::post_types(), true ) ) {
+			return array();
+		}
+
+		// A post that is not published, or sits in an excluded category, must not
+		// keep links in the index: they would count as inbound links to the posts
+		// it points at and hide real orphans.
+		if ( 'publish' !== $post->post_status || self::in_excluded_category( $post ) ) {
+			$this->scan_failed = ! $this->remove_from_index( $post_id );
 			return array();
 		}
 
 		global $wpdb;
-
-		$this->scan_failed = false;
 
 		/*
 		 * Extract before touching the database. The old rows used to be deleted
@@ -455,6 +520,14 @@ class Scanner {
 
 		$table = $wpdb->prefix . 'dil_links';
 
+		// wpdb refuses a value longer than its column, which would roll back the
+		// whole post's index on every scan. The URL is only shown as a label (the
+		// target is stored by ID), so it is shortened instead.
+		$url = (string) $link['url'];
+		if ( mb_strlen( $url ) > self::LINK_URL_MAX_LENGTH ) {
+			$url = mb_substr( $url, 0, self::LINK_URL_MAX_LENGTH );
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom plugin table; no core API available.
 		return false !== $wpdb->insert(
 			$table,
@@ -463,7 +536,7 @@ class Scanner {
 				'target_post_id' => $link['target_id'],
 				'anchor_text'    => $link['anchor_text'],
 				'context'        => $link['context'],
-				'link_url'       => $link['url'],
+				'link_url'       => $url,
 			),
 			array( '%d', '%d', '%s', '%s', '%s' )
 		);
@@ -488,6 +561,85 @@ class Scanner {
 	}
 
 	/**
+	 * Take a post's outbound links out of the index and recount the posts it
+	 * linked to, which each lose an inbound link.
+	 *
+	 * Links pointing AT the post are kept: they are still in other posts'
+	 * content, and find_broken_links() reports them.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool False when the rows could not be deleted.
+	 */
+	public function remove_from_index( int $post_id ): bool {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+		$targets = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT DISTINCT target_post_id FROM %i WHERE source_post_id = %d',
+				$wpdb->prefix . 'dil_links',
+				$post_id
+			)
+		);
+
+		if ( ! $this->clear_post_links( $post_id ) ) {
+			return false;
+		}
+
+		foreach ( array_unique( array_map( 'intval', (array) $targets ) ) as $target_id ) {
+			if ( $target_id > 0 && $target_id !== $post_id ) {
+				$this->update_post_stats( $target_id );
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Delete link rows whose source post is gone, unpublished, of a type no
+	 * longer scanned, or in an excluded category. Catches rows written before
+	 * the status hooks existed, and settings changes.
+	 *
+	 * @return bool False when the delete failed.
+	 */
+	public function prune_index(): bool {
+		global $wpdb;
+
+		$post_types = self::post_types();
+		$excluded   = self::excluded_categories();
+		$args       = array( $wpdb->prefix . 'dil_links' );
+
+		$where = array( 'p.ID IS NULL', "p.post_status <> 'publish'" );
+
+		if ( array() === $post_types ) {
+			// Nothing is scanned, so nothing may stay indexed.
+			$where[] = '1 = 1';
+		} else {
+			$where[] = 'p.post_type NOT IN (' . implode( ',', array_fill( 0, count( $post_types ), '%s' ) ) . ')';
+			$args    = array_merge( $args, $post_types );
+		}
+
+		if ( array() !== $excluded ) {
+			$where[] = "EXISTS (SELECT 1 FROM {$wpdb->term_relationships} tr
+				JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+				WHERE tr.object_id = l.source_post_id AND tt.taxonomy = 'category'
+				AND tt.term_id IN (" . implode( ',', array_fill( 0, count( $excluded ), '%d' ) ) . '))';
+			$args    = array_merge( $args, $excluded );
+		}
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table; the WHERE list is built from fixed fragments and generated placeholders.
+		$result = $wpdb->query(
+			$wpdb->prepare(
+				"DELETE l FROM %i l LEFT JOIN {$wpdb->posts} p ON p.ID = l.source_post_id WHERE " . implode( ' OR ', $where ),
+				...$args
+			)
+		);
+		// phpcs:enable
+
+		return false !== $result;
+	}
+
+	/**
 	 * Update stats for a post and its linked posts
 	 *
 	 * @param int $post_id Post ID
@@ -497,6 +649,17 @@ class Scanner {
 
 		$table_links = $wpdb->prefix . 'dil_links';
 		$table_stats = $wpdb->prefix . 'dil_stats';
+
+		// Stats describe published posts of the scanned types only. A link to a
+		// draft, an attachment or a deleted post would otherwise give it a row
+		// that inflates "Posts Scanned" and the averages; an existing one is
+		// removed here, so a rebuild (recalculate_all_stats) clears old rows too.
+		$post = get_post( $post_id );
+		if ( ! $post || 'publish' !== $post->post_status || ! in_array( $post->post_type, self::post_types(), true ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+			$wpdb->delete( $table_stats, array( 'post_id' => $post_id ), array( '%d' ) );
+			return;
+		}
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
 		// Get outbound count for this post
@@ -582,10 +745,37 @@ class Scanner {
 	 *
 	 * @param int $batch_size Posts per batch
 	 * @param int $offset     Offset for pagination
-	 * @return array ['scanned' => int, 'total' => int, 'complete' => bool]
+	 * @return array ['scanned' => int, 'failed' => int, 'total' => int, 'offset' => int, 'complete' => bool,
+	 *               'pruned' => bool (false when this pass could not remove stale rows)]
 	 */
 	public function scan_all( int $batch_size = 50, int $offset = 0 ): array {
-		$post_types = get_option( 'dragoninternallinks_post_types', array( 'post', 'page' ) );
+		$post_types = self::post_types();
+
+		// Once per full pass: drop rows no current post should have. A failure is
+		// remembered for the rest of the pass, so the batch that reports
+		// completion can say the rebuild was not clean.
+		if ( 0 === $offset ) {
+			if ( $this->prune_index() ) {
+				delete_option( 'dragoninternallinks_prune_failed' );
+			} else {
+				update_option( 'dragoninternallinks_prune_failed', 1, false );
+			}
+		}
+		$pruned = ! get_option( 'dragoninternallinks_prune_failed', false );
+
+		// An empty post_type would make WP_Query fall back to "post".
+		if ( array() === $post_types ) {
+			$this->recalculate_all_stats();
+
+			return array(
+				'scanned'  => 0,
+				'failed'   => 0,
+				'total'    => 0,
+				'offset'   => $offset,
+				'complete' => true,
+				'pruned'   => $pruned,
+			);
+		}
 
 		$args = array(
 			'post_type'      => $post_types,
@@ -596,6 +786,11 @@ class Scanner {
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
 		);
+
+		$excluded = self::excluded_categories();
+		if ( array() !== $excluded ) {
+			$args['category__not_in'] = $excluded;
+		}
 
 		$query    = new \WP_Query( $args );
 		$post_ids = $query->posts;
@@ -623,6 +818,7 @@ class Scanner {
 			'total'    => $total,
 			'offset'   => $offset + $scanned,
 			'complete' => ( $offset + $scanned ) >= $total,
+			'pruned'   => $pruned,
 		);
 	}
 
@@ -635,7 +831,9 @@ class Scanner {
 		$table_links = $wpdb->prefix . 'dil_links';
 		$table_stats = $wpdb->prefix . 'dil_stats';
 
-		// Get all unique post IDs (both source and target)
+		// Every post with links (source or target), plus every post that already
+		// has a stats row: one whose last inbound link was removed is no longer in
+		// the links table, and would otherwise keep its old count.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
 		$post_ids = $wpdb->get_col(
 			$wpdb->prepare(
@@ -643,9 +841,12 @@ class Scanner {
 					SELECT source_post_id AS post_id FROM %i
 					UNION
 					SELECT target_post_id AS post_id FROM %i
+					UNION
+					SELECT post_id FROM %i
 				) AS combined',
 				$table_links,
-				$table_links
+				$table_links,
+				$table_stats
 			)
 		);
 
@@ -660,9 +861,14 @@ class Scanner {
 	 * @param int      $post_id Post ID
 	 * @param \WP_Post $post    Post object
 	 */
-	public function on_post_save( int $post_id, \WP_Post $post ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Required by save_post hook signature.
+	public function on_post_save( int $post_id, \WP_Post $post ): void {
 		// Skip autosaves and revisions
 		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
+			return;
+		}
+
+		// Menu items, templates and other types are never indexed.
+		if ( ! in_array( $post->post_type, self::post_types(), true ) ) {
 			return;
 		}
 
@@ -707,16 +913,51 @@ class Scanner {
 	}
 
 	/**
+	 * Handle a post leaving the published state (draft, pending, private,
+	 * scheduled or trash). Coming back to publish is handled by the save hook.
+	 *
+	 * @param string   $new_status New status.
+	 * @param string   $old_status Old status.
+	 * @param \WP_Post $post       Post.
+	 */
+	public function on_status_change( string $new_status, string $old_status, \WP_Post $post ): void {
+		if ( 'publish' !== $old_status || 'publish' === $new_status ) {
+			return;
+		}
+
+		if ( ! in_array( $post->post_type, self::post_types(), true ) ) {
+			return;
+		}
+
+		$this->remove_from_index( (int) $post->ID );
+	}
+
+	/**
 	 * Handle post trash
 	 *
 	 * @param int $post_id Post ID
 	 */
 	public function on_post_trash( int $post_id ): void {
-		// Clear links from this post
-		$this->clear_post_links( $post_id );
+		$this->remove_from_index( $post_id );
+	}
 
-		// Recalculate stats for posts that linked to this post
-		$this->update_inbound_stats( $post_id );
+	/**
+	 * Handle permanent deletion: the post's links and its stats row go.
+	 *
+	 * @param int $post_id Post ID.
+	 */
+	public function on_post_delete( int $post_id ): void {
+		$post = get_post( $post_id );
+		if ( $post && ! in_array( $post->post_type, self::post_types(), true ) ) {
+			return;
+		}
+
+		global $wpdb;
+
+		$this->remove_from_index( $post_id );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+		$wpdb->delete( $wpdb->prefix . 'dil_stats', array( 'post_id' => $post_id ), array( '%d' ) );
 	}
 
 	/**

@@ -23,7 +23,6 @@ Thumbs.db
 coverage/
 
 # Dev config
-phpcs.xml.dist
 composer.lock
 package-lock.json
 

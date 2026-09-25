@@ -83,17 +83,79 @@ final class LinkerTest extends TestCase {
 		);
 	}
 
-	public function test_keyword_inside_a_block_delimiter_is_not_linked(): void {
-		$content = '<!-- wp:image {"caption":"a coffee beans guide"} -->' . "\n"
+	public function test_keyword_inside_a_block_delimiter_or_caption_is_not_linked(): void {
+		// Captions are never linked (the docs promise it), so the link lands in
+		// the paragraph after the image.
+		$image   = '<!-- wp:image {"caption":"a coffee beans guide"} -->' . "\n"
 			. '<figure class="wp-block-image"><img src="x.png" alt="coffee beans guide"/><figcaption>the coffee beans guide</figcaption></figure>' . "\n"
 			. '<!-- /wp:image -->';
+		$content = $image . '<!-- wp:paragraph --><p>Read the coffee beans guide.</p><!-- /wp:paragraph -->';
 		$out     = $this->link( $content );
 		$this->assertSame(
-			'<!-- wp:image {"caption":"a coffee beans guide"} -->' . "\n"
-			. '<figure class="wp-block-image"><img src="x.png" alt="coffee beans guide"/><figcaption>the <a href="' . self::URL . '">coffee beans guide</a></figcaption></figure>' . "\n"
-			. '<!-- /wp:image -->',
+			$image . '<!-- wp:paragraph --><p>Read the <a href="' . self::URL . '">coffee beans guide</a>.</p><!-- /wp:paragraph -->',
 			$out
 		);
+	}
+
+	public function test_a_figcaption_alone_is_not_linked(): void {
+		$this->assertNull( $this->link( '<figure><img src="x.png"/><figcaption>the coffee beans guide</figcaption></figure>' ) );
+	}
+
+	public function test_classic_caption_shortcode_content_is_not_linked(): void {
+		$GLOBALS['shortcode_tags'] = array( 'caption' => '__return_empty_string' );
+
+		$content = '[caption id="attachment_1" align="alignnone" width="300"]<img src="x.png" /> The coffee beans guide[/caption]' . "\n\n" . 'See the coffee beans guide.';
+		$out     = $this->link( $content );
+
+		$this->assertSame(
+			'[caption id="attachment_1" align="alignnone" width="300"]<img src="x.png" /> The coffee beans guide[/caption]' . "\n\n" . 'See the <a href="' . self::URL . '">coffee beans guide</a>.',
+			$out
+		);
+	}
+
+	public function test_shortcode_attributes_are_not_linked(): void {
+		$GLOBALS['shortcode_tags'] = array( 'button' => '__return_empty_string' );
+
+		$out = $this->link( '<p>[button text="Coffee Beans Guide" url="/x"] then the coffee beans guide</p>' );
+
+		$this->assertSame( '<p>[button text="Coffee Beans Guide" url="/x"] then the <a href="' . self::URL . '">coffee beans guide</a></p>', $out );
+	}
+
+	public function test_enclosing_shortcode_content_is_still_linked(): void {
+		// Page builders wrap whole sections in shortcodes: only the tags are off limits.
+		$GLOBALS['shortcode_tags'] = array( 'section' => '__return_empty_string' );
+
+		$out = $this->link( '<p>[section bg="coffee beans guide"]Our coffee beans guide[/section]</p>' );
+
+		$this->assertSame( '<p>[section bg="coffee beans guide"]Our <a href="' . self::URL . '">coffee beans guide</a>[/section]</p>', $out );
+	}
+
+	public function test_unregistered_bracket_text_is_ordinary_text(): void {
+		$GLOBALS['shortcode_tags'] = array();
+
+		$out = $this->link( '<p>[the coffee beans guide]</p>' );
+
+		$this->assertSame( '<p>[the <a href="' . self::URL . '">coffee beans guide</a>]</p>', $out );
+	}
+
+	public function test_a_keyword_is_not_linked_mid_word_across_an_inline_tag(): void {
+		$linker = new Linker();
+
+		$this->assertNull( $linker->insert( '<p>cat<strong>egory</strong></p>', 'cat', self::URL ), 'the word continues after the tag' );
+		$this->assertNull( $linker->insert( '<p><em>bob</em>cat</p>', 'cat', self::URL ), 'the word started before the tag' );
+		$this->assertSame(
+			'<p>cat<strong>egory</strong> and a <a href="' . self::URL . '">cat</a></p>',
+			$linker->insert( '<p>cat<strong>egory</strong> and a cat</p>', 'cat', self::URL )
+		);
+	}
+
+	public function test_inline_tags_with_space_or_block_tags_still_separate_words(): void {
+		$linker = new Linker();
+
+		$this->assertSame( '<p><strong><a href="' . self::URL . '">cat</a></strong> food</p>', $linker->insert( '<p><strong>cat</strong> food</p>', 'cat', self::URL ) );
+		$this->assertSame( '<p><a href="' . self::URL . '">cat</a></p><p>egory</p>', $linker->insert( '<p>cat</p><p>egory</p>', 'cat', self::URL ) );
+		$this->assertSame( '<p><a href="' . self::URL . '">cat</a><br>egory</p>', $linker->insert( '<p>cat<br>egory</p>', 'cat', self::URL ) );
+		$this->assertSame( "<p>bob\n<em></em><a href=\"" . self::URL . "\">cat</a></p>", $linker->insert( "<p>bob\n<em></em>cat</p>", 'cat', self::URL ), 'a run ending in a newline does not continue the word' );
 	}
 
 	public function test_first_occurrence_across_nested_blocks_in_document_order(): void {
@@ -461,5 +523,37 @@ final class LinkerTest extends TestCase {
 			. '<!-- wp:paragraph -->coffee beans guide</style><p>the <a href="' . self::URL . '">coffee beans guide</a></p><!-- /wp:paragraph -->',
 			$out
 		);
+	}
+
+	public function test_keyword_inside_a_longer_word_is_not_linked(): void {
+		$out = $this->link( '<p>Every category, then the cat.</p>', 'cat' );
+		$this->assertSame( '<p>Every category, then the <a href="' . self::URL . '">cat</a>.</p>', $out );
+	}
+
+	public function test_keyword_that_only_appears_inside_words_is_not_found(): void {
+		$linker = null;
+		$this->assertNull( $this->link( '<p>Concatenate the catalogue.</p>', 'cat', $linker ) );
+		$this->assertFalse( $linker->regex_failed() );
+	}
+
+	public function test_word_boundaries_are_unicode_aware(): void {
+		// \b is ASCII-only, so "café" inside "cafés" would pass it.
+		$out = $this->link( '<p>Les cafés et le café.</p>', 'café' );
+		$this->assertSame( '<p>Les cafés et le <a href="' . self::URL . '">café</a>.</p>', $out );
+	}
+
+	public function test_keyword_is_never_linked_inside_an_entity(): void {
+		$out = $this->link( '<p>Tom &amp; Jerry use amp tools.</p>', 'amp' );
+		$this->assertSame( '<p>Tom &amp; Jerry use <a href="' . self::URL . '">amp</a> tools.</p>', $out );
+	}
+
+	public function test_keyword_at_the_edges_of_the_text_is_linked(): void {
+		$this->assertSame( '<p><a href="' . self::URL . '">cat</a></p>', $this->link( '<p>cat</p>', 'cat' ) );
+		$this->assertSame( '<p>(<a href="' . self::URL . '">cat</a>)</p>', $this->link( '<p>(cat)</p>', 'cat' ) );
+	}
+
+	public function test_keyword_ending_in_punctuation_needs_no_boundary_after_it(): void {
+		$out = $this->link( '<p>Learn C++today.</p>', 'C++' );
+		$this->assertSame( '<p>Learn <a href="' . self::URL . '">C++</a>today.</p>', $out );
 	}
 }

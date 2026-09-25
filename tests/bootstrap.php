@@ -11,6 +11,7 @@
 
 defined( 'ABSPATH' ) || define( 'ABSPATH', __DIR__ . '/' );
 defined( 'DAY_IN_SECONDS' ) || define( 'DAY_IN_SECONDS', 86400 );
+defined( 'WEEK_IN_SECONDS' ) || define( 'WEEK_IN_SECONDS', 604800 );
 defined( 'ARRAY_A' ) || define( 'ARRAY_A', 'ARRAY_A' );
 defined( 'DRAGONINTERNALLINKS_PLUGIN_DIR' ) || define( 'DRAGONINTERNALLINKS_PLUGIN_DIR', dirname( __DIR__ ) . '/' );
 
@@ -48,8 +49,14 @@ function dragoninternallinks_test_reset(): void {
 		'query_posts'     => array(),
 		'query_found'     => 0,
 		'calls'           => array(),
+		'get_posts'       => array(),
+		'terms'           => array(),
+		'cron'            => array(),
+		'schedule_fails'  => false,
+		'settings_errors' => array(),
 	);
-	$GLOBALS['wpdb'] = new DragonInternalLinks_Test_Wpdb();
+	$GLOBALS['wpdb']           = new DragonInternalLinks_Test_Wpdb();
+	$GLOBALS['shortcode_tags'] = array();
 }
 
 /**
@@ -99,6 +106,8 @@ class DragonInternalLinks_Test_Json_Response extends \RuntimeException {
 class DragonInternalLinks_Test_Wpdb {
 	public string $prefix  = 'wp_';
 	public string $posts   = 'wp_posts';
+	public string $term_relationships = 'wp_term_relationships';
+	public string $term_taxonomy      = 'wp_term_taxonomy';
 	public array $returns  = array();
 	public array $calls    = array();
 
@@ -106,6 +115,9 @@ class DragonInternalLinks_Test_Wpdb {
 		$this->calls[] = array( $name, $args );
 		if ( array_key_exists( $name, $this->returns ) ) {
 			$value = $this->returns[ $name ];
+			if ( $value instanceof \Closure ) {
+				return $value( ...$args );
+			}
 			if ( is_array( $value ) && array_key_exists( 'queue', $value ) ) {
 				return array_shift( $this->returns[ $name ]['queue'] );
 			}
@@ -133,10 +145,24 @@ class WP_Query {
 	public int $found_posts;
 
 	public function __construct( array $args = array() ) {
-		unset( $args );
+		dragoninternallinks_test_record( 'WP_Query', array( $args ) );
 		$this->posts       = $GLOBALS['dragoninternallinks_test']['query_posts'];
 		$this->found_posts = $GLOBALS['dragoninternallinks_test']['query_found'];
 	}
+}
+
+/**
+ * WP_Post double with the fields the plugin reads.
+ */
+final class WP_Post {
+	public $ID           = 0;
+	public $post_status  = 'publish';
+	public $post_type    = 'post';
+	public $post_title   = '';
+	public $post_content = '';
+	public $post_date    = '';
+	public $post_parent  = 0;
+	public $post_name    = '';
 }
 
 class WP_Error {
@@ -160,6 +186,15 @@ function is_wp_error( $thing ) {
 function __( $text, $domain = 'default' ) {
 	unset( $domain );
 	return $text;
+}
+
+function _n( $single, $plural, $number, $domain = 'default' ) {
+	unset( $domain );
+	return 1 === (int) $number ? $single : $plural;
+}
+
+function number_format_i18n( $number, $decimals = 0 ) {
+	return number_format( (float) $number, absint( $decimals ) );
 }
 
 function esc_html__( $text, $domain = 'default' ) {
@@ -253,7 +288,7 @@ function home_url( $path = '' ) {
 }
 
 function add_action( ...$args ) {
-	unset( $args );
+	dragoninternallinks_test_record( 'add_action', $args );
 	return true;
 }
 
@@ -431,6 +466,146 @@ function serialize_blocks( $blocks ) {
 function parse_blocks( $content ) {
 	$parser = new \WP_Block_Parser();
 	return $parser->parse( $content );
+}
+
+function get_posts( $args = null ) {
+	dragoninternallinks_test_record( 'get_posts', array( $args ) );
+	return $GLOBALS['dragoninternallinks_test']['get_posts'];
+}
+
+function wp_strip_all_tags( $text, $remove_breaks = false ) {
+	$text = (string) preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text );
+	$text = strip_tags( $text );
+	if ( $remove_breaks ) {
+		$text = (string) preg_replace( '/[\r\n\t ]+/', ' ', $text );
+	}
+	return trim( $text );
+}
+
+/**
+ * Mirrors core for the category check the plugin makes: term IDs only.
+ */
+function has_term( $term = '', $taxonomy = '', $post = null ) {
+	$id    = is_object( $post ) ? (int) $post->ID : (int) $post;
+	$terms = $GLOBALS['dragoninternallinks_test']['terms'][ $id ][ $taxonomy ] ?? array();
+	if ( '' === $term || array() === $term ) {
+		return array() !== $terms;
+	}
+	return array() !== array_intersect( array_map( 'intval', (array) $term ), $terms );
+}
+
+function wp_is_post_autosave( $post ) {
+	unset( $post );
+	return false;
+}
+
+function wp_is_post_revision( $post ) {
+	unset( $post );
+	return false;
+}
+
+function delete_option( $name ) {
+	unset( $GLOBALS['dragoninternallinks_test']['options'][ $name ] );
+	return true;
+}
+
+// Cron: a list of events, each array( timestamp, hook, schedule|false ).
+function wp_next_scheduled( $hook, $args = array() ) {
+	unset( $args );
+	$times = array();
+	foreach ( $GLOBALS['dragoninternallinks_test']['cron'] as $event ) {
+		if ( $event[1] === $hook ) {
+			$times[] = $event[0];
+		}
+	}
+	return array() === $times ? false : min( $times );
+}
+
+function wp_get_schedule( $hook, $args = array() ) {
+	unset( $args );
+	$next = wp_next_scheduled( $hook );
+	foreach ( $GLOBALS['dragoninternallinks_test']['cron'] as $event ) {
+		if ( $event[1] === $hook && $event[0] === $next ) {
+			return $event[2];
+		}
+	}
+	return false;
+}
+
+function wp_schedule_event( $timestamp, $recurrence, $hook, $args = array(), $wp_error = false ) {
+	unset( $args );
+	dragoninternallinks_test_record( 'wp_schedule_event', array( $timestamp, $recurrence, $hook ) );
+	if ( $GLOBALS['dragoninternallinks_test']['schedule_fails'] ) {
+		return $wp_error ? new \WP_Error( 'could_not_set', 'The cron event could not be saved.' ) : false;
+	}
+	$GLOBALS['dragoninternallinks_test']['cron'][] = array( (int) $timestamp, $hook, $recurrence );
+	return true;
+}
+
+function wp_clear_scheduled_hook( $hook, $args = array(), $wp_error = false ) {
+	unset( $args, $wp_error );
+	dragoninternallinks_test_record( 'wp_clear_scheduled_hook', array( $hook ) );
+	$before = count( $GLOBALS['dragoninternallinks_test']['cron'] );
+	$GLOBALS['dragoninternallinks_test']['cron'] = array_values(
+		array_filter( $GLOBALS['dragoninternallinks_test']['cron'], fn( $event ) => $event[1] !== $hook )
+	);
+	return $before - count( $GLOBALS['dragoninternallinks_test']['cron'] );
+}
+
+function wp_unschedule_event( $timestamp, $hook, $args = array(), $wp_error = false ) {
+	unset( $args, $wp_error );
+	$GLOBALS['dragoninternallinks_test']['cron'] = array_values(
+		array_filter( $GLOBALS['dragoninternallinks_test']['cron'], fn( $event ) => ! ( $event[1] === $hook && $event[0] === $timestamp ) )
+	);
+	return true;
+}
+
+function wp_verify_nonce( $nonce, $action = -1 ) {
+	unset( $action );
+	return 'valid' === $nonce ? 1 : false;
+}
+
+function sanitize_key( $key ) {
+	return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
+}
+
+function wp_unslash( $value ) {
+	if ( is_array( $value ) ) {
+		return array_map( 'wp_unslash', $value );
+	}
+	return is_string( $value ) ? stripslashes( $value ) : $value;
+}
+
+function sanitize_text_field( $str ) {
+	// Mirrors core's _sanitize_text_fields( $str, false ).
+	$filtered = (string) $str;
+
+	if ( '' !== $filtered && 1 !== preg_match( '//u', $filtered ) ) {
+		$filtered = (string) preg_replace( '/[\x80-\xFF]/', '', $filtered );
+	}
+
+	if ( str_contains( $filtered, '<' ) ) {
+		$filtered = (string) preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', $filtered );
+		$filtered = strip_tags( $filtered );
+	}
+
+	$filtered = trim( (string) preg_replace( '/[\r\n\t ]+/', ' ', $filtered ) );
+
+	$found = false;
+	while ( preg_match( '/%[a-f0-9]{2}/i', $filtered, $match ) ) {
+		$filtered = str_replace( $match[0], '', $filtered );
+		$found    = true;
+	}
+
+	if ( $found ) {
+		$filtered = trim( (string) preg_replace( '/ +/', ' ', $filtered ) );
+	}
+
+	return $filtered;
+}
+
+function add_settings_error( $setting, $code, $message, $type = 'error' ) {
+	$GLOBALS['dragoninternallinks_test']['settings_errors'][] = array( $setting, $code, $message, $type );
 }
 
 dragoninternallinks_test_reset();

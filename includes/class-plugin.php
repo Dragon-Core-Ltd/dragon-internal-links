@@ -79,12 +79,25 @@ class Plugin {
 	}
 
 	/**
-	 * Schedule the daily dragoninternallinks_daily_scan event if it is missing. Runs on init because
-	 * scheduling reads every plugin's translated cron_schedules labels.
+	 * Schedule the full-scan event (dragoninternallinks_daily_scan) at the
+	 * chosen Full Scan Frequency if it is missing, or move it when it recurs at a
+	 * different one. Runs on init because scheduling reads every plugin's
+	 * translated cron_schedules labels.
+	 *
+	 * A next event with no recurrence is a pending resume of an unfinished scan
+	 * and is left alone; the check happens again once it has run.
 	 */
 	public static function ensure_scheduled(): void {
-		if ( ! wp_next_scheduled( 'dragoninternallinks_daily_scan' ) ) {
-			wp_schedule_event( time(), 'daily', 'dragoninternallinks_daily_scan' );
+		$frequency = Scheduler::frequency();
+
+		if ( ! wp_next_scheduled( Scheduler::CRON_HOOK ) ) {
+			wp_schedule_event( time(), $frequency, Scheduler::CRON_HOOK );
+			return;
+		}
+
+		$current = wp_get_schedule( Scheduler::CRON_HOOK );
+		if ( is_string( $current ) && $current !== $frequency ) {
+			Scheduler::reschedule( $frequency );
 		}
 	}
 
@@ -107,9 +120,7 @@ class Plugin {
 		self::set_default_options();
 
 		// Schedule cron events
-		if ( ! wp_next_scheduled( 'dragoninternallinks_daily_scan' ) ) {
-			wp_schedule_event( time(), 'daily', 'dragoninternallinks_daily_scan' );
-		}
+		self::ensure_scheduled();
 
 		// Flush rewrite rules
 		flush_rewrite_rules();
