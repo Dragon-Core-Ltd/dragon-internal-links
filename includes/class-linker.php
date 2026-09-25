@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
  * HTML chunk is then tokenised into text, tags, comments, declarations and
  * raw-text element contents, and only text is searched: text inside an open
  * <a> is skipped, and the contents of <script>, <style>, <textarea> and
- * <title> are skipped whole. The matched text is used as the anchor text so
+ * <title> are skipped whole, as are captions and headings. The matched text is used as the anchor text so
  * the post's own casing is preserved.
  *
  * Traversal state (an open <a>, an open raw-text element) is carried across
@@ -55,6 +55,12 @@ class Linker {
 	 * as a block's <figcaption>.
 	 */
 	private const CAPTION_SHORTCODES = array( 'caption', 'wp_caption' );
+
+	/**
+	 * Elements whose text is never linked, like a caption: <figcaption> and
+	 * headings.
+	 */
+	private const UNLINKED_ELEMENTS = array( 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' );
 
 	/**
 	 * A tag's attribute section, with quoted values (which may hold ">") kept
@@ -253,7 +259,7 @@ class Linker {
 	 * an inline tag or a line break reads as one here), so only insert() decides
 	 * whether a keyword can be applied.
 	 *
-	 * Captions (<figcaption> and the caption shortcode), shortcode tags,
+	 * Captions (<figcaption> and the caption shortcode), headings, shortcode tags,
 	 * scripts, styles and comments are left out, inline tags join the text on
 	 * either side (so "cat<strong>egory</strong>" reads "category"), and every
 	 * other tag separates it.
@@ -266,6 +272,7 @@ class Linker {
 			'@<(script|style)\b[^>]*?>.*?</\1>@si' => ' ',
 			'@<!--.*?-->@s'                        => ' ',
 			'@<figcaption\b.*?</figcaption>@si'    => ' ',
+			'@<h([1-6])\b.*?</h\1\s*>@si'          => ' ',
 			'/\[(' . implode( '|', self::CAPTION_SHORTCODES ) . ')(?![\w-])[^\]]*\].*?\[\/\1\]/si' => ' ',
 		);
 
@@ -390,7 +397,7 @@ class Linker {
 	 * depth 0), "raw" is the name of the open raw-text element, if any,
 	 * "broken" is set once a chunk has ended inside a tag, after which nothing
 	 * is linkable, "caption" is the depth of open captions (<figcaption> or the
-	 * caption shortcode), whose text is never linked, and "glue" is whether the
+	 * caption shortcode) and headings, whose text is never linked, and "glue" is whether the
 	 * text so far ends in a word character with only inline tags since, so the
 	 * next text run continues that word.
 	 *
@@ -975,13 +982,13 @@ class Linker {
 			if ( 'a' === $tag && $state['anchor'] > 0 ) {
 				--$state['anchor'];
 			}
-			if ( 'figcaption' === $tag && $state['caption'] > 0 ) {
+			if ( in_array( $tag, self::UNLINKED_ELEMENTS, true ) && $state['caption'] > 0 ) {
 				--$state['caption'];
 			}
 			return;
 		}
 
-		if ( 'figcaption' === $tag ) {
+		if ( in_array( $tag, self::UNLINKED_ELEMENTS, true ) ) {
 			++$state['caption'];
 			return;
 		}

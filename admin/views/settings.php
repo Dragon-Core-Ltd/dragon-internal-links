@@ -117,7 +117,7 @@ defined( 'ABSPATH' ) || exit;
 								max="10"
 								class="small-text">
 						<p class="description">
-							<?php esc_html_e( 'Minimum number of words in a keyword phrase for suggestions, for both the full title and the shorter phrase taken from its main words. Higher = more specific matches.', 'dragon-internal-links' ); ?>
+							<?php esc_html_e( 'Minimum number of words for phrases copied as written from the title of the page being linked to: the full title, and the shorter phrase taken from its main words. Anchors built from the distinctive terms of a page can be shorter. Higher = more specific title matches.', 'dragon-internal-links' ); ?>
 						</p>
 					</td>
 				</tr>

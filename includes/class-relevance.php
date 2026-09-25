@@ -138,6 +138,66 @@ final class Relevance {
 	}
 
 	/**
+	 * Whether a lowercased word is a stop word.
+	 *
+	 * @param string $word Lowercased word.
+	 * @return bool
+	 */
+	public static function is_stop_word( string $word ): bool {
+		return in_array( $word, self::STOP_WORDS, true );
+	}
+
+	/**
+	 * Number of documents each term appears in.
+	 *
+	 * @param array<int|string, string[]> $docs Token lists from tokenize().
+	 * @return array<string, int>
+	 */
+	public static function document_frequencies( array $docs ): array {
+		$df = array();
+		foreach ( $docs as $tokens ) {
+			foreach ( array_unique( $tokens ) as $term ) {
+				$df[ $term ] = ( $df[ $term ] ?? 0 ) + 1;
+			}
+		}
+		return $df;
+	}
+
+	/**
+	 * A document's terms ordered by TF-IDF weight, highest first.
+	 *
+	 * @param string[]           $tokens Document tokens from tokenize().
+	 * @param array<string, int> $df     Document frequencies across the pool.
+	 * @param int                $count  Number of documents in the pool.
+	 * @param int                $limit  Most terms to return.
+	 * @return array<string, float> Term => weight.
+	 */
+	public static function top_terms( array $tokens, array $df, int $count, int $limit ): array {
+		$total = count( $tokens );
+		if ( 0 === $total || $limit <= 0 ) {
+			return array();
+		}
+
+		$weights = array();
+		foreach ( array_count_values( $tokens ) as $term => $freq ) {
+			$term             = (string) $term;
+			$idf              = log( ( 1 + $count ) / ( 1 + ( $df[ $term ] ?? 0 ) ) ) + 1;
+			$weights[ $term ] = ( $freq / $total ) * $idf;
+		}
+
+		// Ties keep a stable, alphabetical order.
+		uksort(
+			$weights,
+			static function ( $a, $b ) use ( $weights ): int {
+				$order = $weights[ $b ] <=> $weights[ $a ];
+				return 0 !== $order ? $order : strcmp( (string) $a, (string) $b );
+			}
+		);
+
+		return array_slice( $weights, 0, $limit, true );
+	}
+
+	/**
 	 * Cosine similarity between the source document and every target
 	 * document, using TF-IDF weights with IDF computed across the whole
 	 * pool (source + targets).
@@ -153,13 +213,8 @@ final class Relevance {
 		}
 
 		// Document frequency per term.
-		$df    = array();
+		$df    = self::document_frequencies( $docs );
 		$count = count( $docs );
-		foreach ( $docs as $tokens ) {
-			foreach ( array_unique( $tokens ) as $term ) {
-				$df[ $term ] = ( $df[ $term ] ?? 0 ) + 1;
-			}
-		}
 
 		// TF-IDF vector per document.
 		$vectors = array();

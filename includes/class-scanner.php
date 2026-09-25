@@ -135,7 +135,7 @@ class Scanner {
 		 * first, so anything that went wrong afterwards left the post with no
 		 * index at all while the scan still reported the links it had found.
 		 */
-		$links = $this->extract_links( $post->post_content, (string) get_permalink( $post ) );
+		$links = $this->extract_links( $post->post_content, (string) get_permalink( $post ), $this->indexed_targets( $post_id ) );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction control around this plugin's own writes.
 		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
@@ -183,18 +183,26 @@ class Scanner {
 	/**
 	 * Extract internal links from HTML content
 	 *
-	 * @param string $content  HTML content
-	 * @param string $base_url URL of the page the content belongs to; relative
-	 *                         hrefs are resolved against it. Defaults to the home URL.
+	 * A link whose URL no longer resolves to a published post is still kept
+	 * when it points at a post that is trashed, a draft, pending or scheduled
+	 * (found by its slug), or at a target this post's index already held that
+	 * has since been deleted or unpublished. Those are the links Link Health
+	 * reports, so they must survive every rescan until they are fixed.
+	 *
+	 * @param string $content        HTML content
+	 * @param string $base_url       URL of the page the content belongs to; relative
+	 *                               hrefs are resolved against it. Defaults to the home URL.
+	 * @param array  $indexed_targets Target post IDs the index held for this
+	 *                               content, keyed by stored link URL.
 	 * @return array Array of link data
 	 */
-	public function extract_links( string $content, string $base_url = '' ): array {
+	public function extract_links( string $content, string $base_url = '', array $indexed_targets = array() ): array {
 		if ( empty( $content ) ) {
 			return array();
 		}
 
 		$base  = '' !== $base_url ? $base_url : $this->site_url;
-		$links = array();
+		$found = array();
 
 		// Use DOMDocument for proper HTML parsing
 		$dom = new \DOMDocument();
@@ -207,7 +215,8 @@ class Scanner {
 		);
 		libxml_clear_errors();
 
-		$anchors = $dom->getElementsByTagName( 'a' );
+		$anchors    = $dom->getElementsByTagName( 'a' );
+		$unresolved = array();
 
 		foreach ( $anchors as $anchor ) {
 			$href = $anchor->getAttribute( 'href' );
@@ -227,8 +236,33 @@ class Scanner {
 			$target_post_id = $this->url_to_post_id( $absolute );
 
 			if ( ! $target_post_id ) {
+				$unresolved[] = $absolute;
+			}
+
+			$found[] = array(
+				'href'     => $href,
+				'absolute' => $absolute,
+				'target'   => (int) $target_post_id,
+				'anchor'   => $anchor,
+			);
+		}
+
+		$unpublished = array() === $unresolved ? array() : $this->unpublished_targets( $unresolved );
+
+		$links = array();
+		foreach ( $found as $item ) {
+			$target_post_id = $item['target'];
+
+			if ( ! $target_post_id ) {
+				$target_post_id = $unpublished[ $item['absolute'] ]
+					?? $this->carried_target( $indexed_targets[ self::stored_url( $item['href'] ) ] ?? 0 );
+			}
+
+			if ( ! $target_post_id ) {
 				continue;
 			}
+
+			$anchor = $item['anchor'];
 
 			// Get anchor text
 			$anchor_text = trim( $anchor->textContent ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOMNode property name.
@@ -237,7 +271,7 @@ class Scanner {
 			$context = $this->get_link_context( $anchor );
 
 			$links[] = array(
-				'url'         => $href,
+				'url'         => $item['href'],
 				'target_id'   => $target_post_id,
 				'anchor_text' => mb_substr( $anchor_text, 0, 255 ),
 				'context'     => mb_substr( $context, 0, 500 ),
@@ -245,6 +279,187 @@ class Scanner {
 		}
 
 		return $links;
+	}
+
+	/**
+	 * Target post IDs a post's index holds now, keyed by the stored link URL.
+	 *
+	 * @param int $post_id Source post ID.
+	 * @return array<string,int>
+	 */
+	private function indexed_targets( int $post_id ): array {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom plugin table; no core API or cache available.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT link_url, target_post_id FROM %i WHERE source_post_id = %d',
+				$wpdb->prefix . 'dil_links',
+				$post_id
+			),
+			ARRAY_A
+		);
+
+		$targets = array();
+		foreach ( (array) $rows as $row ) {
+			if ( is_array( $row ) && isset( $row['link_url'], $row['target_post_id'] ) ) {
+				$targets[ (string) $row['link_url'] ] = (int) $row['target_post_id'];
+			}
+		}
+
+		return $targets;
+	}
+
+	/**
+	 * An indexed target kept for a link whose URL no longer resolves: only one
+	 * that is deleted or no longer published. A published target reached by a
+	 * URL that no longer resolves has moved (core redirects its old slug), so
+	 * the link is not carried.
+	 *
+	 * @param int $target_id Indexed target post ID, or 0.
+	 * @return int The target ID, or 0.
+	 */
+	private function carried_target( int $target_id ): int {
+		if ( $target_id <= 0 ) {
+			return 0;
+		}
+
+		$target = get_post( $target_id );
+		if ( $target && in_array( $target->post_status, array( 'publish', 'private', 'inherit' ), true ) ) {
+			return 0;
+		}
+
+		return $target_id;
+	}
+
+	/**
+	 * The link URL as the links table stores it (link_url is varchar(500)).
+	 *
+	 * @param string $url Link href.
+	 * @return string
+	 */
+	private static function stored_url( string $url ): string {
+		return mb_strlen( $url ) > self::LINK_URL_MAX_LENGTH ? mb_substr( $url, 0, self::LINK_URL_MAX_LENGTH ) : $url;
+	}
+
+	/**
+	 * Find the trashed, draft, pending or scheduled posts that internal URLs
+	 * point at. url_to_postid() cannot: trashing renames the slug, and it only
+	 * sees unpublished posts the current user may read.
+	 *
+	 * Candidates come from one query on the last path segment (the slug, or the
+	 * slug a trashed post will get back); each is kept only when the permalink
+	 * it would have if published is the URL itself, so an archive or another
+	 * path ending in the same segment never matches.
+	 *
+	 * @param string[] $urls Absolute internal URLs that did not resolve.
+	 * @return array<string,int> Post ID keyed by URL.
+	 */
+	private function unpublished_targets( array $urls ): array {
+		global $wpdb;
+
+		$post_types = self::post_types();
+		$slugs      = array();
+		foreach ( $urls as $url ) {
+			$slug = self::last_segment( $url );
+			if ( '' !== $slug ) {
+				$slugs[ $slug ] = true;
+			}
+		}
+
+		if ( array() === $slugs || array() === $post_types ) {
+			return array();
+		}
+
+		$slugs = array_keys( $slugs );
+		$slug  = implode( ',', array_fill( 0, count( $slugs ), '%s' ) );
+		$type  = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Core tables with generated placeholders; one query per scanned post, only for links that did not resolve.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT p.ID, p.post_status, p.post_name, m.meta_value AS desired_slug
+				 FROM {$wpdb->posts} p
+				 LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_desired_post_slug'
+				 WHERE p.post_status IN ('draft', 'pending', 'future', 'trash')
+				 AND p.post_type IN ({$type})
+				 AND ( p.post_name IN ({$slug}) OR ( p.post_status = 'trash' AND m.meta_value IN ({$slug}) ) )
+				 ORDER BY p.ID ASC
+				 LIMIT 200",
+				...array_merge( $post_types, $slugs, $slugs )
+			),
+			ARRAY_A
+		);
+		// phpcs:enable
+
+		$wanted = array();
+		foreach ( $urls as $url ) {
+			$wanted[ self::comparable_url( $url ) ] = $url;
+		}
+
+		$found = array();
+		foreach ( (array) $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+
+			$post = get_post( (int) ( $row['ID'] ?? 0 ) );
+			if ( ! $post instanceof \WP_Post ) {
+				continue;
+			}
+
+			// The post as it would be published, which is the URL it was
+			// linked by. The clone keeps the loaded filter, so core's permalink
+			// functions use it rather than fetching the stored post again.
+			$published              = clone $post;
+			$published->post_status = 'publish';
+			if ( 'trash' === $post->post_status ) {
+				$desired              = (string) ( $row['desired_slug'] ?? '' );
+				$published->post_name = '' !== $desired ? $desired : (string) preg_replace( '/__trashed$/', '', (string) $post->post_name );
+			}
+
+			$permalink = get_permalink( $published );
+			if ( ! is_string( $permalink ) || '' === $permalink ) {
+				continue;
+			}
+
+			$absolute = $this->resolve_url( $permalink, $this->site_url );
+			$key      = null === $absolute ? '' : self::comparable_url( $absolute );
+			if ( isset( $wanted[ $key ] ) && ! isset( $found[ $wanted[ $key ] ] ) ) {
+				$found[ $wanted[ $key ] ] = (int) $post->ID;
+			}
+		}
+
+		return $found;
+	}
+
+	/**
+	 * Last non-empty path segment of a URL, lowercased as post slugs are
+	 * stored (percent-encoded, lowercase).
+	 *
+	 * @param string $url Absolute URL.
+	 * @return string
+	 */
+	private static function last_segment( string $url ): string {
+		$path     = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
+		$segments = '' === $path ? array() : explode( '/', $path );
+
+		return strtolower( (string) end( $segments ) );
+	}
+
+	/**
+	 * A URL in a form two spellings of the same address share: comparable
+	 * host, path without its trailing slash (core redirects between the two),
+	 * and the query.
+	 *
+	 * @param string $url Absolute URL.
+	 * @return string
+	 */
+	private static function comparable_url( string $url ): string {
+		$query = wp_parse_url( $url, PHP_URL_QUERY );
+
+		return self::comparable_host( $url ) . '/' . trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' )
+			. ( is_string( $query ) && '' !== $query ? '?' . $query : '' );
 	}
 
 	/**
@@ -523,10 +738,7 @@ class Scanner {
 		// wpdb refuses a value longer than its column, which would roll back the
 		// whole post's index on every scan. The URL is only shown as a label (the
 		// target is stored by ID), so it is shortened instead.
-		$url = (string) $link['url'];
-		if ( mb_strlen( $url ) > self::LINK_URL_MAX_LENGTH ) {
-			$url = mb_substr( $url, 0, self::LINK_URL_MAX_LENGTH );
-		}
+		$url = self::stored_url( (string) $link['url'] );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom plugin table; no core API available.
 		return false !== $wpdb->insert(

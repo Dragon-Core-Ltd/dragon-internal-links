@@ -115,6 +115,7 @@ class DragonInternalLinks_Test_Json_Response extends \RuntimeException {
 class DragonInternalLinks_Test_Wpdb {
 	public string $prefix  = 'wp_';
 	public string $posts   = 'wp_posts';
+	public string $postmeta = 'wp_postmeta';
 	public string $options = 'wp_options';
 	public string $term_relationships = 'wp_term_relationships';
 	public string $term_taxonomy      = 'wp_term_taxonomy';
@@ -501,8 +502,17 @@ function serialize_blocks( $blocks ) {
 }
 
 function parse_blocks( $content ) {
+	dragoninternallinks_test_record( 'parse_blocks', array( strlen( (string) $content ) ) );
 	$parser = new \WP_Block_Parser();
 	return $parser->parse( $content );
+}
+
+/**
+ * Category term IDs of a post, as core returns them by default.
+ */
+function wp_get_post_categories( $post_id = 0, $args = array() ) {
+	unset( $args );
+	return array_map( 'intval', $GLOBALS['dragoninternallinks_test']['terms'][ (int) $post_id ]['category'] ?? array() );
 }
 
 function get_posts( $args = null ) {

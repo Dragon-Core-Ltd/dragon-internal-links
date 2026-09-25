@@ -32,9 +32,38 @@ class Analyzer {
 	private const PROBE_CLOSE = "\u{E001}";
 
 	/**
+	 * Most dry-run inserts (each parses the source's blocks) one post may
+	 * cost while suggestions are generated for it.
+	 */
+	public const MAX_PROBES_PER_POST = 40;
+
+	/**
+	 * Most anchor phrases tried per target, and matches kept per target.
+	 */
+	private const MAX_PHRASES_PER_TARGET = 12;
+	private const MAX_MATCHES_PER_TARGET = 3;
+
+	/**
+	 * Top TF-IDF terms of a target that may be suggested as a single word.
+	 */
+	private const TOP_TERMS = 8;
+
+	/**
+	 * Shortest single word suggested as an anchor, in characters.
+	 */
+	private const MIN_SINGLE_WORD_LENGTH = 4;
+
+	/**
 	 * Scanner instance
 	 */
 	private Scanner $scanner;
+
+	/**
+	 * Tokens of each post's title and content, per request.
+	 *
+	 * @var array<int, string[]>
+	 */
+	private array $token_cache = array();
 
 	/**
 	 * Constructor
@@ -248,11 +277,50 @@ class Analyzer {
 
 		$targets = get_posts( $target_args );
 
+		// Document frequencies across the source and its candidate targets say
+		// which of a target's terms are distinctive enough to link on their own.
+		$docs = array( 0 => $this->post_tokens( $post ) );
 		foreach ( $targets as $target ) {
-			// Extract keywords from target title
-			$keywords = $this->extract_keywords( $target->post_title, $min_words );
+			$docs[ (int) $target->ID ] = $this->post_tokens( $target );
+		}
+		$df        = Relevance::document_frequencies( $docs );
+		$doc_count = count( $docs );
 
-			foreach ( $keywords as $keyword ) {
+		// The linkable text is built once; every phrase is checked against it
+		// before the dry-run insert, which is the expensive step.
+		$matchable = Linker::matchable_text( $post->post_content );
+		$probes    = self::MAX_PROBES_PER_POST;
+
+		foreach ( $targets as $target ) {
+			$phrases = array_merge(
+				$this->extract_keywords( $target->post_title, $min_words ),
+				$this->topic_phrases( $target, $docs[ (int) $target->ID ], $df, $doc_count )
+			);
+
+			$matches = 0;
+			$tried   = array();
+			foreach ( $phrases as $keyword ) {
+				$key = mb_strtolower( $keyword );
+				if ( isset( $tried[ $key ] ) || count( $tried ) >= self::MAX_PHRASES_PER_TARGET ) {
+					continue;
+				}
+				$tried[ $key ] = true;
+
+				if ( 1 !== preg_match( Linker::keyword_pattern( $keyword ), $matchable ) ) {
+					continue;
+				}
+
+				// One shared word is thin evidence: a single-word anchor also
+				// needs another distinctive term the two posts have in common.
+				if ( ! str_contains( $keyword, ' ' ) && ! self::share_another_term( $docs[0], $docs[ (int) $target->ID ], mb_strtolower( $keyword ), $df, $doc_count ) ) {
+					continue;
+				}
+
+				if ( $probes <= 0 ) {
+					break 2;
+				}
+				--$probes;
+
 				// The keyword must appear as whole words, exactly as the linker
 				// will look for it when the suggestion is applied.
 				$context = $this->find_keyword_context( $post->post_content, $keyword );
@@ -269,6 +337,10 @@ class Analyzer {
 					'relevance'      => $this->calculate_relevance( $keyword, $target, $post ),
 					'target_title'   => $target->post_title,
 				);
+
+				if ( ++$matches >= self::MAX_MATCHES_PER_TARGET ) {
+					break;
+				}
 			}
 		}
 
@@ -280,14 +352,18 @@ class Analyzer {
 		// Sort by relevance
 		usort( $suggestions, fn( $a, $b ) => $b['relevance'] <=> $a['relevance'] );
 
-		// Limit and dedupe by target
-		$seen_targets = array();
-		$filtered     = array();
+		// Limit and dedupe: one suggestion per target, and one target per
+		// anchor (the same words can only link to one place).
+		$seen_targets  = array();
+		$seen_keywords = array();
+		$filtered      = array();
 
 		foreach ( $suggestions as $suggestion ) {
-			if ( ! isset( $seen_targets[ $suggestion['target_post_id'] ] ) ) {
+			$keyword = mb_strtolower( (string) $suggestion['keyword'] );
+			if ( ! isset( $seen_targets[ $suggestion['target_post_id'] ] ) && ! isset( $seen_keywords[ $keyword ] ) ) {
 				$filtered[]                                    = $suggestion;
 				$seen_targets[ $suggestion['target_post_id'] ] = true;
+				$seen_keywords[ $keyword ]                     = true;
 			}
 
 			if ( count( $filtered ) >= 10 ) {
@@ -444,7 +520,7 @@ class Analyzer {
 		}
 
 		if ( AI_Ranker::enabled() ) {
-			// Send only the current front-runners — one API call per post.
+			// Send only the current front-runners - one API call per post.
 			$order = array_keys( $suggestions );
 			usort( $order, fn( $a, $b ) => $suggestions[ $b ]['relevance'] <=> $suggestions[ $a ]['relevance'] );
 			$top = array_slice( $order, 0, 12 );
@@ -560,6 +636,134 @@ class Analyzer {
 		}
 
 		return array_values( array_unique( array_filter( $keywords, fn( $k ) => '' !== $k ) ) );
+	}
+
+	/**
+	 * Tokens of a post's title and the start of its content, cached per request.
+	 *
+	 * @param \WP_Post $post Post.
+	 * @return string[]
+	 */
+	private function post_tokens( \WP_Post $post ): array {
+		$id = (int) $post->ID;
+		if ( ! isset( $this->token_cache[ $id ] ) ) {
+			$text                     = html_entity_decode( $post->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) . ' '
+				. html_entity_decode( wp_strip_all_tags( mb_substr( (string) $post->post_content, 0, 4000 ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			$this->token_cache[ $id ] = Relevance::tokenize( $text );
+		}
+		return $this->token_cache[ $id ];
+	}
+
+	/**
+	 * Whether two posts share a distinctive term (used by no more than half of
+	 * the posts compared) other than the given one.
+	 *
+	 * @param string[]           $source    Source tokens.
+	 * @param string[]           $target    Target tokens.
+	 * @param string             $except    Lowercased term to leave out.
+	 * @param array<string, int> $df        Document frequencies across the pool.
+	 * @param int                $doc_count Posts in the pool.
+	 * @return bool
+	 */
+	private static function share_another_term( array $source, array $target, string $except, array $df, int $doc_count ): bool {
+		$max_df = max( 1, (int) ceil( $doc_count / 2 ) );
+
+		foreach ( array_keys( array_intersect_key( array_flip( $source ), array_flip( $target ) ) ) as $term ) {
+			$term = (string) $term;
+			if ( $term !== $except && ( $df[ $term ] ?? 0 ) <= $max_df ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Anchor phrases for a target taken from its distinctive terms, most
+	 * specific first: 3-, 2- and 1-word runs of its title's words, then the
+	 * top TF-IDF terms of its content.
+	 *
+	 * A phrase never starts or ends with a stop word, and a run never crosses
+	 * punctuation. A single word must be at least MIN_SINGLE_WORD_LENGTH
+	 * characters, among the target's top TF-IDF terms, and used by no more
+	 * than half of the posts compared, so words every post shares are never
+	 * suggested on their own. A single word taken from the content, not the
+	 * title, must also appear there at least twice.
+	 *
+	 * @param \WP_Post           $target    Target post.
+	 * @param string[]           $tokens    Target tokens from post_tokens().
+	 * @param array<string, int> $df        Document frequencies across the pool.
+	 * @param int                $doc_count Posts in the pool.
+	 * @return string[]
+	 */
+	private function topic_phrases( \WP_Post $target, array $tokens, array $df, int $doc_count ): array {
+		$top      = Relevance::top_terms( $tokens, $df, $doc_count, self::TOP_TERMS );
+		$max_df   = max( 1, (int) ceil( $doc_count / 2 ) );
+		$distinct = static function ( string $word ) use ( $top, $df, $max_df ): bool {
+			return mb_strlen( $word ) >= self::MIN_SINGLE_WORD_LENGTH
+				&& isset( $top[ $word ] )
+				&& ( $df[ $word ] ?? 0 ) <= $max_df;
+		};
+
+		// Title words in runs split at punctuation, keeping their spelling.
+		$title = html_entity_decode( $target->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$title = self::trim_trailing_punctuation( trim( (string) preg_replace( '/\s+/', ' ', $title ) ) );
+		$runs  = array();
+		$run   = array();
+		foreach ( '' === $title ? array() : explode( ' ', $title ) as $word ) {
+			$core = preg_replace( '/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/u', '', $word );
+			$core = is_string( $core ) ? $core : '';
+
+			if ( '' === $core || 1 === preg_match( '/^[^\p{L}\p{N}]/u', $word ) ) {
+				$runs[] = $run;
+				$run    = array();
+			}
+			if ( '' !== $core ) {
+				$run[] = $core;
+			}
+			if ( 1 === preg_match( '/[^\p{L}\p{N}]$/u', $word ) ) {
+				$runs[] = $run;
+				$run    = array();
+			}
+		}
+		$runs[] = $run;
+
+		$by_length = array(
+			3 => array(),
+			2 => array(),
+			1 => array(),
+		);
+		foreach ( $runs as $run ) {
+			$count = count( $run );
+			for ( $length = 3; $length >= 1; $length-- ) {
+				for ( $i = 0; $i + $length <= $count; $i++ ) {
+					$words = array_slice( $run, $i, $length );
+					$first = mb_strtolower( $words[0] );
+					$last  = mb_strtolower( $words[ $length - 1 ] );
+
+					if ( Relevance::is_stop_word( $first ) || Relevance::is_stop_word( $last ) || mb_strlen( $first ) < 3 || mb_strlen( $last ) < 3 ) {
+						continue;
+					}
+					if ( 1 === $length && ! $distinct( $first ) ) {
+						continue;
+					}
+
+					$by_length[ $length ][] = implode( ' ', $words );
+				}
+			}
+		}
+
+		// A word only the content supplies must be used more than once there.
+		$phrases = array_merge( $by_length[3], $by_length[2], $by_length[1] );
+		$tf      = array_count_values( $tokens );
+		foreach ( array_keys( $top ) as $term ) {
+			$term = (string) $term;
+			if ( $distinct( $term ) && ( $tf[ $term ] ?? 0 ) >= 2 ) {
+				$phrases[] = $term;
+			}
+		}
+
+		return array_values( array_filter( array_map( array( self::class, 'cap_keyword' ), $phrases ), static fn( $p ) => '' !== $p ) );
 	}
 
 	/**
