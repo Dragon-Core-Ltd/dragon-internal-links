@@ -40,10 +40,18 @@ class Plugin {
 	 */
 	private function __construct() {
 		self::migrate_legacy_prefix();
+		self::register_hooks();
+		$this->init_components();
+	}
+
+	/**
+	 * Hook the schedule, per-site setup and site deletion.
+	 */
+	private static function register_hooks(): void {
 		add_action( 'init', array( __CLASS__, 'ensure_scheduled' ) );
 		add_action( 'init', array( __CLASS__, 'maybe_install' ) );
 		add_action( 'wp_initialize_site', array( __CLASS__, 'initialize_site' ), 200 );
-		$this->init_components();
+		add_filter( 'wpmu_drop_tables', array( __CLASS__, 'drop_site_tables' ), 10, 2 );
 	}
 
 	/**
@@ -144,9 +152,6 @@ class Plugin {
 
 		// Schedule cron events
 		self::ensure_scheduled();
-
-		// Flush rewrite rules
-		flush_rewrite_rules();
 	}
 
 	/**
@@ -159,7 +164,6 @@ class Plugin {
 			$network_wide,
 			static function (): void {
 				wp_clear_scheduled_hook( 'dragoninternallinks_daily_scan' );
-				flush_rewrite_rules();
 			}
 		);
 	}
@@ -205,6 +209,30 @@ class Plugin {
 		switch_to_blog( (int) $site->blog_id );
 		self::activate_site();
 		restore_current_blog();
+	}
+
+	/**
+	 * Add this plugin's tables to those core drops when a site is deleted.
+	 *
+	 * @param string[] $tables  Tables core will drop, keyed by name.
+	 * @param int      $site_id ID of the site being deleted.
+	 * @return string[]
+	 */
+	public static function drop_site_tables( $tables, $site_id = 0 ): array {
+		global $wpdb;
+
+		$tables = is_array( $tables ) ? $tables : array();
+		if ( (int) $site_id <= 0 ) {
+			return $tables;
+		}
+
+		$prefix = $wpdb->get_blog_prefix( (int) $site_id );
+
+		foreach ( array( 'dil_links', 'dil_stats', 'dil_suggestions' ) as $name ) {
+			$tables[ $name ] = $prefix . $name;
+		}
+
+		return $tables;
 	}
 
 	/**

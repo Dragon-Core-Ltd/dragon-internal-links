@@ -479,6 +479,20 @@ class Analyzer {
 	}
 
 	/**
+	 * Drop sentence punctuation and whitespace from the end of a title,
+	 * character by character so a multibyte letter is never cut.
+	 *
+	 * @param string $title Title.
+	 * @return string
+	 */
+	private static function trim_trailing_punctuation( string $title ): string {
+		$trimmed = preg_replace( '/[\s?!.,;:\x{2026}]+$/u', '', $title );
+
+		// Invalid UTF-8 fails the /u pattern; trim the ASCII marks only.
+		return null === $trimmed ? rtrim( $title, ' ?!.,;:' ) : $trimmed;
+	}
+
+	/**
 	 * Extract keywords from text
 	 *
 	 * @param string $text      Text to extract from
@@ -498,7 +512,7 @@ class Analyzer {
 		// each spelling they may have in the content.
 		$title = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		$title = trim( (string) preg_replace( '/\s+/', ' ', $title ) );
-		$title = rtrim( $title, " ?!.,;:\u{2026}" );
+		$title = self::trim_trailing_punctuation( $title );
 
 		$words = '' === $title ? array() : explode( ' ', $title );
 
@@ -663,7 +677,7 @@ class Analyzer {
 
 		// Exact title match bonus
 		$title = html_entity_decode( $target->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-		$title = rtrim( trim( (string) preg_replace( '/\s+/', ' ', $title ) ), " ?!.,;:\u{2026}" );
+		$title = self::trim_trailing_punctuation( trim( (string) preg_replace( '/\s+/', ' ', $title ) ) );
 		if ( strtolower( $keyword ) === strtolower( $title ) ) {
 			$score *= 1.5;
 		}

@@ -123,6 +123,33 @@ final class AnalyzerTest extends TestCase {
 		$this->assertContains( $title, $keywords );
 	}
 
+	/**
+	 * Titles whose last character shares a UTF-8 byte with the ellipsis.
+	 *
+	 * @return array<string, array{0: string, 1: string}>
+	 */
+	public static function multibyte_titles(): array {
+		return array(
+			'cyrillic er'  => array( 'Как собрать компьютер', 'Как собрать компьютер' ),
+			'cyrillic tse' => array( 'Настройка сервер…', 'Настройка сервер' ),
+			'latin a grave' => array( 'Café au lait À?', 'Café au lait À' ),
+			'cjk one'      => array( 'Chapter 一', 'Chapter 一' ),
+		);
+	}
+
+	#[DataProvider( 'multibyte_titles' )]
+	public function test_trailing_punctuation_trim_keeps_multibyte_characters_whole( string $title, string $expected ): void {
+		$analyzer = new Analyzer( new Scanner() );
+
+		$keywords = $this->call_private( $analyzer, 'extract_keywords', array( $title, 2 ) );
+
+		$this->assertSame( $expected, $keywords[0] );
+		$this->assertSame( 1, preg_match( '//u', $keywords[0] ) );
+		$this->assertNotNull(
+			$this->call_private( $analyzer, 'find_keyword_context', array( '<p>Read ' . $expected . ' today.</p>', $keywords[0] ) )
+		);
+	}
+
 	public function test_extract_keywords_caps_long_titles_at_a_word_boundary(): void {
 		$analyzer = new Analyzer( new Scanner() );
 		$words    = array();

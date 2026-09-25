@@ -154,6 +154,55 @@ final class PluginTest extends TestCase {
 		$this->assertSame( 1, get_current_blog_id() );
 	}
 
+	public function test_activation_and_deactivation_never_flush_rewrite_rules(): void {
+		$this->network(
+			array(
+				1 => array(),
+				2 => array(),
+				4 => array(),
+			)
+		);
+
+		Plugin::activate( false );
+		Plugin::activate( true );
+		$GLOBALS['dragoninternallinks_test']['network_active'] = true;
+		Plugin::initialize_site( (object) array( 'blog_id' => '4' ) );
+		Plugin::deactivate( false );
+		Plugin::deactivate( true );
+
+		$this->assertSame( array(), dragoninternallinks_test_calls( 'flush_rewrite_rules' ) );
+	}
+
+	public function test_deleting_a_site_drops_its_tables(): void {
+		$this->network(
+			array(
+				1 => array(),
+				3 => array(),
+			)
+		);
+		switch_to_blog( 3 );
+
+		$tables = Plugin::drop_site_tables( array( 'posts' => 'wp_3_posts' ), 3 );
+
+		restore_current_blog();
+		$this->assertSame( array( 'posts' => 'wp_1_posts' ), Plugin::drop_site_tables( array( 'posts' => 'wp_1_posts' ) ), 'no site id, nothing added' );
+		$this->assertSame( 'wp_3_posts', $tables['posts'] );
+		$this->assertContains( 'wp_3_dil_links', $tables );
+		$this->assertContains( 'wp_3_dil_stats', $tables );
+		$this->assertContains( 'wp_3_dil_suggestions', $tables );
+	}
+
+	public function test_site_deletion_hook_receives_the_site_id(): void {
+		$method = new \ReflectionMethod( Plugin::class, 'register_hooks' );
+		$method->setAccessible( true );
+		$method->invoke( null );
+
+		$this->assertContains(
+			array( 'wpmu_drop_tables', array( Plugin::class, 'drop_site_tables' ), 10, 2 ),
+			dragoninternallinks_test_calls( 'add_filter' )
+		);
+	}
+
 	public function test_uninstall_on_a_single_site_without_opt_in_keeps_data(): void {
 		include __DIR__ . '/../uninstall.php';
 

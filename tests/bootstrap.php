@@ -120,6 +120,23 @@ class DragonInternalLinks_Test_Wpdb {
 	public string $term_taxonomy      = 'wp_term_taxonomy';
 	public array $returns  = array();
 	public array $calls    = array();
+	public string $base_prefix = 'wp_';
+
+	/**
+	 * Table prefix of a site, as core's wpdb::get_blog_prefix() builds it.
+	 *
+	 * @param int|null $blog_id Site ID, or null for the current site.
+	 */
+	public function get_blog_prefix( $blog_id = null ) {
+		if ( ! is_multisite() ) {
+			return $this->base_prefix;
+		}
+		if ( null === $blog_id ) {
+			$blog_id = get_current_blog_id();
+		}
+		$blog_id = (int) $blog_id;
+		return ( 0 === $blog_id || 1 === $blog_id ) ? $this->base_prefix : $this->base_prefix . $blog_id . '_';
+	}
 
 	public function __call( string $name, array $args ) {
 		$this->calls[] = array( $name, $args );
@@ -303,7 +320,7 @@ function add_action( ...$args ) {
 }
 
 function add_filter( ...$args ) {
-	unset( $args );
+	dragoninternallinks_test_record( 'add_filter', $args );
 	return true;
 }
 
@@ -681,7 +698,7 @@ function wp_doing_cron() {
 }
 
 function flush_rewrite_rules( $hard = true ) {
-	unset( $hard );
+	dragoninternallinks_test_record( 'flush_rewrite_rules', array( $hard ) );
 }
 
 function dbDelta( $queries = '', $execute = true ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.FunctionNameInvalid
