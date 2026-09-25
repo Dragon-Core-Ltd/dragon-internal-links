@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.9
+Stable tag: 1.1.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,11 @@ Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
 
+= 1.1.10 =
+* Unpublished, trashed and deleted posts leave the link index.
+* Dismissed suggestions stay dismissed, and the Exclude Categories and Scan Frequency settings now take effect.
+* Suggestions are only offered where they can be applied, and links are never placed inside words, shortcodes or captions.
+
 = 1.1.9 =
 * Every screen, email and alert is now translatable, and translations bundled in the plugin's languages folder now load. Counts use proper plural forms, and numbers and dates follow your site's language.
 * Priorities, post types and link statuses show readable labels.
@@ -147,6 +152,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.10 =
+More accurate orphan reports and link suggestions.
 
 = 1.1.9 =
 Translation-ready throughout.

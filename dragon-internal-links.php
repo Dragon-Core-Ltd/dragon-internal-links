@@ -3,7 +3,7 @@
  * Plugin Name: Dragon Internal Links
  * Plugin URI: https://dragoncore.ltd/plugins/dragon-internal-links
  * Description: Find internal linking opportunities, detect orphan content, and improve your site's SEO structure.
- * Version: 1.1.9
+ * Version: 1.1.10
  * Author: Dragon Core
  * Author URI: https://dragoncore.ltd
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'DRAGONINTERNALLINKS_VERSION', '1.1.9' );
+define( 'DRAGONINTERNALLINKS_VERSION', '1.1.10' );
 define( 'DRAGONINTERNALLINKS_PLUGIN_FILE', __FILE__ );
 define( 'DRAGONINTERNALLINKS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DRAGONINTERNALLINKS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
