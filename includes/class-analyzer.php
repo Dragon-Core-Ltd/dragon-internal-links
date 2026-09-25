@@ -491,29 +491,58 @@ class Analyzer {
 
 		$keywords = array();
 
-		// Full title as keyword. preg_replace() returns null on invalid UTF-8
-		// (the /u flag); the raw title is used as-is in that case.
-		$clean_title = preg_replace( '/[^\w\s]/u', '', $text );
-		if ( ! is_string( $clean_title ) ) {
-			$clean_title = $text;
-		}
-		$clean_title = trim( $clean_title );
-		$words       = preg_split( '/\s+/', $clean_title );
-		if ( ! is_array( $words ) ) {
-			$words = array( $clean_title );
+		// The title as written: entities decoded (a title saved through kses
+		// holds "&amp;"), whitespace collapsed, and sentence punctuation at the
+		// end dropped so "What Is Cold Brew?" matches mid-sentence. Apostrophes,
+		// hyphens, colons and ampersands stay; Linker::keyword_pattern() matches
+		// each spelling they may have in the content.
+		$title = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$title = trim( (string) preg_replace( '/\s+/', ' ', $title ) );
+		$title = rtrim( $title, " ?!.,;:\u{2026}" );
+
+		$words = '' === $title ? array() : explode( ' ', $title );
+
+		$counted = array_filter( $words, fn( $w ) => 1 === preg_match( '/[\p{L}\p{N}]/u', $w ) || 1 !== preg_match( '//u', $w ) );
+		if ( count( $counted ) >= $min_words ) {
+			$keywords[] = self::cap_keyword( $title );
 		}
 
-		if ( count( $words ) >= $min_words ) {
-			$keywords[] = self::cap_keyword( $clean_title );
+		// Also try a shorter phrase: the first run of adjacent meaningful words
+		// (no stop word or punctuation between them), held to the same Minimum
+		// Keyword Words setting as the full title.
+		$runs = array();
+		$run  = array();
+		foreach ( $words as $word ) {
+			$core = preg_replace( '/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/u', '', $word );
+			$core = is_string( $core ) ? $core : $word;
+
+			$meaningful = '' !== $core && mb_strlen( $core ) > 2 && ! in_array( mb_strtolower( $core ), $stop_words, true );
+
+			// A stop word, or punctuation before the word, ends the run.
+			if ( ! $meaningful || 1 === preg_match( '/^[^\p{L}\p{N}]/u', $word ) ) {
+				$runs[] = $run;
+				$run    = array();
+			}
+
+			if ( ! $meaningful ) {
+				continue;
+			}
+
+			$run[] = $core;
+
+			// Punctuation after the word ends the run too.
+			if ( 1 === preg_match( '/[^\p{L}\p{N}]$/u', $word ) ) {
+				$runs[] = $run;
+				$run    = array();
+			}
 		}
+		$runs[] = $run;
 
-		// Also try a shorter phrase of the title's meaningful words, held to the
-		// same Minimum Keyword Words setting as the full title.
-		$meaningful_words = array_values( array_filter( $words, fn( $w ) => ! in_array( strtolower( $w ), $stop_words, true ) && strlen( $w ) > 2 ) );
-		$phrase_words     = array_slice( $meaningful_words, 0, max( 3, $min_words ) );
-
-		if ( count( $phrase_words ) >= max( 1, $min_words ) ) {
-			$keywords[] = self::cap_keyword( implode( ' ', $phrase_words ) );
+		foreach ( $runs as $run ) {
+			if ( count( $run ) >= max( 1, $min_words ) ) {
+				$keywords[] = self::cap_keyword( implode( ' ', array_slice( $run, 0, max( 3, $min_words ) ) ) );
+				break;
+			}
 		}
 
 		return array_values( array_unique( array_filter( $keywords, fn( $k ) => '' !== $k ) ) );
@@ -633,7 +662,9 @@ class Analyzer {
 		$score = 1.0;
 
 		// Exact title match bonus
-		if ( strtolower( $keyword ) === strtolower( $target->post_title ) ) {
+		$title = html_entity_decode( $target->post_title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$title = rtrim( trim( (string) preg_replace( '/\s+/', ' ', $title ) ), " ?!.,;:\u{2026}" );
+		if ( strtolower( $keyword ) === strtolower( $title ) ) {
 			$score *= 1.5;
 		}
 

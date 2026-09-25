@@ -41,8 +41,15 @@ class Plugin {
 	private function __construct() {
 		self::migrate_legacy_prefix();
 		add_action( 'init', array( __CLASS__, 'ensure_scheduled' ) );
+		add_action( 'init', array( __CLASS__, 'maybe_install' ) );
+		add_action( 'wp_initialize_site', array( __CLASS__, 'initialize_site' ), 200 );
 		$this->init_components();
 	}
+
+	/**
+	 * Option set once the legacy-prefix migration has run on this site.
+	 */
+	private const LEGACY_MIGRATED_OPTION = 'dragoninternallinks_legacy_migrated';
 
 	/**
 	 * Move options and the scan schedule off the pre-1.0.1 three-letter (dil_)
@@ -55,6 +62,11 @@ class Plugin {
 	 * scanned link data is untouched.
 	 */
 	private static function migrate_legacy_prefix(): void {
+		// Autoloaded, so once set this check costs no query on any request.
+		if ( get_option( self::LEGACY_MIGRATED_OPTION ) ) {
+			return;
+		}
+
 		// db_version is a schema marker managed by activation, not user data.
 		delete_option( 'dil_db_version' );
 
@@ -76,6 +88,8 @@ class Plugin {
 		if ( $legacy_cron ) {
 			wp_unschedule_event( $legacy_cron, 'dil_daily_scan' );
 		}
+
+		update_option( self::LEGACY_MIGRATED_OPTION, 1, true );
 	}
 
 	/**
@@ -113,9 +127,18 @@ class Plugin {
 	}
 
 	/**
-	 * Plugin activation
+	 * Plugin activation. A network activation sets up every site.
+	 *
+	 * @param bool $network_wide Whether the plugin is being network-activated.
 	 */
-	public static function activate(): void {
+	public static function activate( bool $network_wide = false ): void {
+		self::for_each_site( $network_wide, array( __CLASS__, 'activate_site' ) );
+	}
+
+	/**
+	 * Set up the current site: tables, default options, the scan schedule.
+	 */
+	private static function activate_site(): void {
 		self::create_tables();
 		self::set_default_options();
 
@@ -127,11 +150,79 @@ class Plugin {
 	}
 
 	/**
-	 * Plugin deactivation
+	 * Plugin deactivation. A network deactivation clears every site's schedule.
+	 *
+	 * @param bool $network_wide Whether the plugin is being network-deactivated.
 	 */
-	public static function deactivate(): void {
-		wp_clear_scheduled_hook( 'dragoninternallinks_daily_scan' );
-		flush_rewrite_rules();
+	public static function deactivate( bool $network_wide = false ): void {
+		self::for_each_site(
+			$network_wide,
+			static function (): void {
+				wp_clear_scheduled_hook( 'dragoninternallinks_daily_scan' );
+				flush_rewrite_rules();
+			}
+		);
+	}
+
+	/**
+	 * Run a callback on the current site, or on every site of the network.
+	 *
+	 * @param bool     $network_wide Whether to run on every site.
+	 * @param callable $callback     Callback, run with that site switched in.
+	 */
+	private static function for_each_site( bool $network_wide, callable $callback ): void {
+		if ( ! $network_wide || ! is_multisite() ) {
+			$callback();
+			return;
+		}
+
+		foreach ( get_sites(
+			array(
+				'fields' => 'ids',
+				'number' => 0,
+			)
+		) as $site_id ) {
+			switch_to_blog( (int) $site_id );
+			$callback();
+			restore_current_blog();
+		}
+	}
+
+	/**
+	 * Set up a site added to a network where the plugin is network-active.
+	 *
+	 * @param object $site The new site (WP_Site).
+	 */
+	public static function initialize_site( $site ): void {
+		if ( ! function_exists( 'is_plugin_active_for_network' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		if ( ! is_plugin_active_for_network( DRAGONINTERNALLINKS_PLUGIN_BASENAME ) ) {
+			return;
+		}
+
+		switch_to_blog( (int) $site->blog_id );
+		self::activate_site();
+		restore_current_blog();
+	}
+
+	/**
+	 * Create the tables on a site that has none yet, such as a site of a
+	 * network that was active before per-site setup existed. Runs in admin
+	 * and cron only, so front-end requests never pay for the check.
+	 */
+	public static function maybe_install(): void {
+		if ( ! is_admin() && ! wp_doing_cron() ) {
+			return;
+		}
+
+		if ( false !== get_option( 'dragoninternallinks_db_version' ) ) {
+			return;
+		}
+
+		self::create_tables();
+		self::set_default_options();
 	}
 
 	/**
@@ -187,7 +278,9 @@ class Plugin {
             KEY idx_relevance (relevance_score)
         ) $charset_collate;";
 
-		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		if ( ! function_exists( 'dbDelta' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		}
 		dbDelta( $sql_links );
 		dbDelta( $sql_stats );
 		dbDelta( $sql_suggestions );

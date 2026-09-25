@@ -42,17 +42,21 @@ require_once DRAGONINTERNALLINKS_PLUGIN_DIR . 'includes/class-ajax.php';
 
 /**
  * Plugin activation hook
+ *
+ * @param bool $network_wide Whether the plugin is being network-activated.
  */
-function dragoninternallinks_activate() {
-	Plugin::activate();
+function dragoninternallinks_activate( $network_wide = false ) {
+	Plugin::activate( (bool) $network_wide );
 }
 register_activation_hook( __FILE__, __NAMESPACE__ . '\dragoninternallinks_activate' );
 
 /**
  * Plugin deactivation hook
+ *
+ * @param bool $network_wide Whether the plugin is being network-deactivated.
  */
-function dragoninternallinks_deactivate() {
-	Plugin::deactivate();
+function dragoninternallinks_deactivate( $network_wide = false ) {
+	Plugin::deactivate( (bool) $network_wide );
 }
 register_deactivation_hook( __FILE__, __NAMESPACE__ . '\dragoninternallinks_deactivate' );
 

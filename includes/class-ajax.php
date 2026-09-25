@@ -57,8 +57,12 @@ class Ajax {
 		$offset     = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
 		$batch_size = 50;
 
+		// Failures so far come back from the page, so the count covers the whole
+		// run rather than the last batch.
+		$failed_before = isset( $_POST['failed'] ) ? absint( $_POST['failed'] ) : 0;
+
 		$result = $this->scanner->scan_all( $batch_size, $offset );
-		$failed = (int) ( $result['failed'] ?? 0 );
+		$failed = $failed_before + (int) ( $result['failed'] ?? 0 );
 
 		if ( $result['complete'] ) {
 			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Local timestamp is intentional; displayed via date_i18n().
@@ -73,6 +77,7 @@ class Ajax {
 				'offset'   => $result['offset'],
 				'complete' => $result['complete'],
 				'failed'   => $failed,
+				'warning'  => $failed > 0 || ( $result['complete'] && false === ( $result['pruned'] ?? true ) ),
 				'message'  => self::scan_message( $result, $failed ),
 			)
 		);
@@ -167,10 +172,15 @@ class Ajax {
 		$batch_size = 20;
 		$offset     = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
 
+		// Failures and a stale list so far come back from the page, so the
+		// warning covers the whole run rather than the last batch.
+		$failed_before = isset( $_POST['failed'] ) ? absint( $_POST['failed'] ) : 0;
+		$stale_before  = ! empty( $_POST['stale'] );
+
 		$result = $this->analyzer->generate_all_suggestions( $batch_size, $offset );
 
-		$failed = (int) ( $result['failed'] ?? 0 );
-		$stale  = ! empty( $result['stale'] );
+		$failed = $failed_before + (int) ( $result['failed'] ?? 0 );
+		$stale  = $stale_before || ! empty( $result['stale'] );
 
 		if ( $result['done'] ) {
 			$message = sprintf(
@@ -207,6 +217,7 @@ class Ajax {
 				'generated' => $result['generated'],
 				'failed'    => $failed,
 				'stale'     => $stale,
+				'warning'   => $failed > 0 || $stale,
 				'offset'    => $result['offset'],
 				'total'     => $result['total'],
 				'done'      => $result['done'],

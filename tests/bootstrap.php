@@ -54,6 +54,15 @@ function dragoninternallinks_test_reset(): void {
 		'cron'            => array(),
 		'schedule_fails'  => false,
 		'settings_errors' => array(),
+		'http'            => array(),
+		'uploads'         => array(),
+		'multisite'       => false,
+		'blog_id'         => 1,
+		'blogs'           => array(),
+		'blog_stack'      => array(),
+		'network_active'  => false,
+		'is_admin'        => false,
+		'doing_cron'      => false,
 	);
 	$GLOBALS['wpdb']           = new DragonInternalLinks_Test_Wpdb();
 	$GLOBALS['shortcode_tags'] = array();
@@ -106,6 +115,7 @@ class DragonInternalLinks_Test_Json_Response extends \RuntimeException {
 class DragonInternalLinks_Test_Wpdb {
 	public string $prefix  = 'wp_';
 	public string $posts   = 'wp_posts';
+	public string $options = 'wp_options';
 	public string $term_relationships = 'wp_term_relationships';
 	public string $term_taxonomy      = 'wp_term_taxonomy';
 	public array $returns  = array();
@@ -317,6 +327,16 @@ function update_option( $name, $value, $autoload = null ) {
 	// failed write, which is why callers verify an option by reading it back.
 	if ( array_key_exists( $name, (array) ( $GLOBALS['dragoninternallinks_test']['options'] ?? array() ) )
 		&& $GLOBALS['dragoninternallinks_test']['options'][ $name ] === $value ) {
+		return false;
+	}
+	$GLOBALS['dragoninternallinks_test']['options'][ $name ] = $value;
+	return true;
+}
+
+function add_option( $name, $value = '', $deprecated = '', $autoload = null ) {
+	unset( $deprecated, $autoload );
+	// Core never overwrites: an option that already exists is left alone.
+	if ( array_key_exists( $name, (array) $GLOBALS['dragoninternallinks_test']['options'] ) ) {
 		return false;
 	}
 	$GLOBALS['dragoninternallinks_test']['options'][ $name ] = $value;
@@ -606,6 +626,126 @@ function sanitize_text_field( $str ) {
 
 function add_settings_error( $setting, $code, $message, $type = 'error' ) {
 	$GLOBALS['dragoninternallinks_test']['settings_errors'][] = array( $setting, $code, $message, $type );
+}
+
+function wp_salt( $scheme = 'auth' ) {
+	return 'test-salt-' . $scheme;
+}
+
+// HTTP: 'http' holds the canned response (array or WP_Error); each call is recorded.
+function wp_safe_remote_post( $url, $args = array() ) {
+	dragoninternallinks_test_record( 'wp_safe_remote_post', array( $url, $args ) );
+	return $GLOBALS['dragoninternallinks_test']['http'] ?? new \WP_Error( 'http_request_failed', 'No response.' );
+}
+
+function wp_remote_retrieve_response_code( $response ) {
+	if ( is_wp_error( $response ) || ! isset( $response['response'] ) || ! is_array( $response['response'] ) ) {
+		return '';
+	}
+	return $response['response']['code'];
+}
+
+function wp_remote_retrieve_body( $response ) {
+	if ( is_wp_error( $response ) || ! isset( $response['body'] ) ) {
+		return '';
+	}
+	return $response['body'];
+}
+
+function wp_upload_dir( $time = null, $create_dir = true, $refresh_cache = false ) {
+	unset( $time, $create_dir, $refresh_cache );
+	return array_merge(
+		array(
+			'path'    => '',
+			'url'     => '',
+			'subdir'  => '',
+			'basedir' => '',
+			'baseurl' => 'https://example.test/wp-content/uploads',
+			'error'   => false,
+		),
+		$GLOBALS['dragoninternallinks_test']['uploads']
+	);
+}
+
+function wp_date( $format, $timestamp = null, $timezone = null ) {
+	unset( $timezone );
+	return gmdate( $format, $timestamp ?? time() );
+}
+
+function is_admin() {
+	return (bool) $GLOBALS['dragoninternallinks_test']['is_admin'];
+}
+
+function wp_doing_cron() {
+	return (bool) $GLOBALS['dragoninternallinks_test']['doing_cron'];
+}
+
+function flush_rewrite_rules( $hard = true ) {
+	unset( $hard );
+}
+
+function dbDelta( $queries = '', $execute = true ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.FunctionNameInvalid
+	unset( $execute );
+	dragoninternallinks_test_record( 'dbDelta', array( $GLOBALS['wpdb']->prefix, $queries ) );
+	return array();
+}
+
+// Multisite: switch_to_blog() swaps the options, cron and table prefix per site, as core does.
+function is_multisite() {
+	return (bool) $GLOBALS['dragoninternallinks_test']['multisite'];
+}
+
+function get_current_blog_id() {
+	return (int) $GLOBALS['dragoninternallinks_test']['blog_id'];
+}
+
+function get_sites( $args = array() ) {
+	dragoninternallinks_test_record( 'get_sites', array( $args ) );
+	$ids = array_keys( $GLOBALS['dragoninternallinks_test']['blogs'] );
+	if ( ! in_array( 1, $ids, true ) ) {
+		array_unshift( $ids, 1 );
+	}
+	$number = $args['number'] ?? 100;
+	if ( $number ) {
+		$ids = array_slice( $ids, 0, (int) $number );
+	}
+	return 'ids' === ( $args['fields'] ?? '' ) ? $ids : array_map( fn( $id ) => (object) array( 'blog_id' => (string) $id ), $ids );
+}
+
+function dragoninternallinks_test_load_blog( int $id ): void {
+	$t = &$GLOBALS['dragoninternallinks_test'];
+
+	$t['blogs'][ $t['blog_id'] ] = array(
+		'options' => $t['options'],
+		'cron'    => $t['cron'],
+	);
+
+	$t['blog_id']            = $id;
+	$t['options']            = $t['blogs'][ $id ]['options'] ?? array();
+	$t['cron']               = $t['blogs'][ $id ]['cron'] ?? array();
+	$GLOBALS['wpdb']->prefix  = 1 === $id ? 'wp_' : 'wp_' . $id . '_';
+	$GLOBALS['wpdb']->options = $GLOBALS['wpdb']->prefix . 'options';
+}
+
+function switch_to_blog( $new_blog_id, $deprecated = null ) {
+	unset( $deprecated );
+	$GLOBALS['dragoninternallinks_test']['blog_stack'][] = get_current_blog_id();
+	dragoninternallinks_test_load_blog( (int) $new_blog_id );
+	return true;
+}
+
+function restore_current_blog() {
+	$stack = &$GLOBALS['dragoninternallinks_test']['blog_stack'];
+	if ( array() === $stack ) {
+		return false;
+	}
+	dragoninternallinks_test_load_blog( (int) array_pop( $stack ) );
+	return true;
+}
+
+function is_plugin_active_for_network( $plugin ) {
+	unset( $plugin );
+	return is_multisite() && (bool) $GLOBALS['dragoninternallinks_test']['network_active'];
 }
 
 dragoninternallinks_test_reset();

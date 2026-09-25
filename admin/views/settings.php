@@ -153,6 +153,11 @@ defined( 'ABSPATH' ) || exit;
 				<?php esc_html_e( 'Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. One small request per post when generating suggestions; your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring.', 'dragon-internal-links' ); ?>
 			</p>
 
+			<?php $dragoninternallinks_ai_status = \DragonInternalLinks\Admin::ai_status_message(); ?>
+			<?php if ( '' !== $dragoninternallinks_ai_status ) : ?>
+				<div class="notice notice-warning inline"><p><?php echo esc_html( $dragoninternallinks_ai_status ); ?></p></div>
+			<?php endif; ?>
+
 			<table class="form-table">
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Enable AI ranking', 'dragon-internal-links' ); ?></th>

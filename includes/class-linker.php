@@ -162,7 +162,41 @@ class Linker {
 		$left  = $is_word( mb_substr( $keyword, 0, 1 ) ) ? '(?<![' . self::WORD_CHARS . '&])' : '';
 		$right = $is_word( mb_substr( $keyword, -1 ) ) ? '(?![' . self::WORD_CHARS . '])' : '';
 
-		return '/' . $left . preg_quote( $keyword, '/' ) . $right . '/iu';
+		return '/' . $left . self::keyword_body( $keyword ) . $right . '/iu';
+	}
+
+	/**
+	 * Characters that HTML spells more than one way, each with every spelling
+	 * it may have in post content, so a keyword taken from a title matches
+	 * "&amp;" for "&" and a curly or encoded apostrophe for "'".
+	 */
+	private const CHAR_SPELLINGS = array(
+		'&' => '(?:&amp;|&#0*38;|&#x0*26;|&)',
+		"'" => "(?:'|\u{2019}|\u{2018}|&#0*39;|&#x0*27;|&apos;|&#0*8217;|&#x0*2019;|&rsquo;|&#0*8216;|&#x0*2018;|&lsquo;)",
+	);
+
+	/**
+	 * The keyword as a pattern body: literal text, with "&" and apostrophes
+	 * matching any of their HTML spellings.
+	 *
+	 * @param string $keyword Keyword (valid UTF-8).
+	 * @return string
+	 */
+	private static function keyword_body( string $keyword ): string {
+		$chars = preg_split( '//u', $keyword, -1, PREG_SPLIT_NO_EMPTY );
+		if ( ! is_array( $chars ) ) {
+			return preg_quote( $keyword, '/' );
+		}
+
+		$body = '';
+		foreach ( $chars as $char ) {
+			if ( "\u{2019}" === $char || "\u{2018}" === $char ) {
+				$char = "'";
+			}
+			$body .= self::CHAR_SPELLINGS[ $char ] ?? preg_quote( $char, '/' );
+		}
+
+		return $body;
 	}
 
 	/**

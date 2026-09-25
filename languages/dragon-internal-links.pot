@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-25T02:32:48+00:00\n"
+"POT-Creation-Date: 2026-09-25T07:28:28+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.11.0\n"
 "X-Domain: dragon-internal-links\n"
@@ -20,7 +20,7 @@ msgstr ""
 #: admin/views/orphans.php:16
 #: admin/views/settings.php:16
 #: admin/views/suggestions.php:16
-#: includes/class-admin.php:54
+#: includes/class-admin.php:123
 msgid "Dragon Internal Links"
 msgstr ""
 
@@ -70,7 +70,7 @@ msgstr ""
 #: admin/views/orphans.php:30
 #: admin/views/settings.php:30
 #: admin/views/suggestions.php:30
-#: dragon-internal-links.php:85
+#: dragon-internal-links.php:89
 msgid "Settings"
 msgstr ""
 
@@ -302,43 +302,43 @@ msgstr ""
 msgid "Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. One small request per post when generating suggestions; your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring."
 msgstr ""
 
-#: admin/views/settings.php:158
+#: admin/views/settings.php:163
 msgid "Enable AI ranking"
 msgstr ""
 
-#: admin/views/settings.php:162
+#: admin/views/settings.php:167
 msgid "Use an AI model to score suggestion relevance"
 msgstr ""
 
-#: admin/views/settings.php:168
+#: admin/views/settings.php:173
 msgid "Provider"
 msgstr ""
 
-#: admin/views/settings.php:181
+#: admin/views/settings.php:186
 msgid "Model"
 msgstr ""
 
-#: admin/views/settings.php:191
+#: admin/views/settings.php:196
 msgid "Leave blank for the provider default. A small, cheap model is plenty for ranking."
 msgstr ""
 
-#: admin/views/settings.php:197
+#: admin/views/settings.php:202
 msgid "API key"
 msgstr ""
 
-#: admin/views/settings.php:207
+#: admin/views/settings.php:212
 msgid "Stored encrypted. Leave the dots untouched to keep the saved key; clear the field to remove it."
 msgstr ""
 
-#: admin/views/settings.php:212
+#: admin/views/settings.php:217
 msgid "Delete all data on uninstall"
 msgstr ""
 
-#: admin/views/settings.php:216
+#: admin/views/settings.php:221
 msgid "When the plugin is deleted, remove the link index, suggestions and settings. Leave off to keep them for a future reinstall."
 msgstr ""
 
-#: admin/views/settings.php:223
+#: admin/views/settings.php:228
 msgid "Save Settings"
 msgstr ""
 
@@ -375,7 +375,7 @@ msgid "Context:"
 msgstr ""
 
 #: admin/views/suggestions.php:105
-#: includes/class-admin.php:132
+#: includes/class-admin.php:201
 msgid "Apply Link"
 msgstr ""
 
@@ -387,179 +387,203 @@ msgstr ""
 msgid "Edit Post"
 msgstr ""
 
-#: includes/class-admin.php:55
+#. translators: 1: old AI model id, 2: new AI model id
+#: includes/class-admin.php:73
+msgid "The AI model %1$s has been retired by its provider, so AI ranking now uses %2$s. You can choose another model in Settings."
+msgstr ""
+
+#: includes/class-admin.php:97
+msgid "the reply could not be read as scores"
+msgstr ""
+
+#. translators: 1: HTTP status code, 2: error message from the AI provider
+#: includes/class-admin.php:102
+msgid "HTTP %1$s: %2$s"
+msgstr ""
+
+#. translators: %s: HTTP status code
+#: includes/class-admin.php:105
+msgid "HTTP %s"
+msgstr ""
+
+#. translators: 1: date and time, 2: AI model id, 3: reason the request failed
+#: includes/class-admin.php:110
+msgid "The last AI ranking request (%1$s, model %2$s) failed, so suggestions used the built-in scoring: %3$s"
+msgstr ""
+
+#: includes/class-admin.php:124
 msgid "Internal Links"
 msgstr ""
 
-#: includes/class-admin.php:67
+#: includes/class-admin.php:136
 #: includes/class-ajax.php:54
-#: includes/class-ajax.php:127
-#: includes/class-ajax.php:164
-#: includes/class-ajax.php:225
-#: includes/class-ajax.php:252
-#: includes/class-ajax.php:293
+#: includes/class-ajax.php:132
+#: includes/class-ajax.php:169
+#: includes/class-ajax.php:236
+#: includes/class-ajax.php:263
+#: includes/class-ajax.php:304
 msgid "Permission denied."
 msgstr ""
 
-#: includes/class-admin.php:126
+#: includes/class-admin.php:195
 msgid "Scanning..."
 msgstr ""
 
-#: includes/class-admin.php:127
+#: includes/class-admin.php:196
 msgid "Scan complete!"
 msgstr ""
 
-#: includes/class-admin.php:128
+#: includes/class-admin.php:197
 msgid "Generating suggestions..."
 msgstr ""
 
-#: includes/class-admin.php:129
+#: includes/class-admin.php:198
 msgid "An error occurred."
 msgstr ""
 
-#: includes/class-admin.php:130
+#: includes/class-admin.php:199
 msgid "Are you sure?"
 msgstr ""
 
-#: includes/class-admin.php:131
+#: includes/class-admin.php:200
 msgid "Applying..."
 msgstr ""
 
-#: includes/class-admin.php:202
+#: includes/class-admin.php:271
 msgid "High"
 msgstr ""
 
-#: includes/class-admin.php:203
+#: includes/class-admin.php:272
 msgid "Medium"
 msgstr ""
 
-#: includes/class-admin.php:204
+#: includes/class-admin.php:273
 msgid "Low"
 msgstr ""
 
-#: includes/class-admin.php:234
+#: includes/class-admin.php:303
 msgid "Deleted"
 msgstr ""
 
-#: includes/class-admin.php:329
+#: includes/class-admin.php:398
 msgid "The new scan frequency was saved, but the background scan could not be rescheduled. It will be retried on the next page load."
 msgstr ""
 
-#: includes/class-admin.php:362
+#: includes/class-admin.php:438
 msgid "Settings saved."
 msgstr ""
 
-#: includes/class-admin.php:369
+#: includes/class-admin.php:445
 msgid "Links"
 msgstr ""
 
-#: includes/class-admin.php:403
+#: includes/class-admin.php:479
 msgid "Inbound / Outbound links"
 msgstr ""
 
 #. translators: %s: number of posts processed.
-#: includes/class-ajax.php:92
+#: includes/class-ajax.php:97
 msgid "Scan complete! Processed %s post."
 msgid_plural "Scan complete! Processed %s posts."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: number of posts scanned so far, 2: total number of posts.
-#: includes/class-ajax.php:97
+#: includes/class-ajax.php:102
 msgid "Scanning... %1$s / %2$s"
 msgstr ""
 
 #. translators: %s: number of posts whose links could not be saved.
-#: includes/class-ajax.php:103
+#: includes/class-ajax.php:108
 msgid "%s post could not be indexed and keeps its previous links."
 msgid_plural "%s posts could not be indexed and keep their previous links."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-ajax.php:114
+#: includes/class-ajax.php:119
 msgid "Links from posts that are no longer published, scanned or included could not be removed, so some link counts may be too high. Run the scan again."
 msgstr ""
 
-#: includes/class-ajax.php:133
+#: includes/class-ajax.php:138
 msgid "Invalid post ID."
 msgstr ""
 
-#: includes/class-ajax.php:142
+#: includes/class-ajax.php:147
 msgid "The links could not be saved, so the index is unchanged. Please try again."
 msgstr ""
 
 #. translators: %s: number of internal links found.
-#: includes/class-ajax.php:150
+#: includes/class-ajax.php:155
 msgid "Found %s internal link."
 msgid_plural "Found %s internal links."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: total posts analyzed for link suggestions.
-#: includes/class-ajax.php:178
+#: includes/class-ajax.php:188
 msgid "Done - analyzed %s post for link suggestions."
 msgid_plural "Done - analyzed %s posts for link suggestions."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: posts processed so far, 2: total posts.
-#: includes/class-ajax.php:183
+#: includes/class-ajax.php:193
 msgid "Generating... %1$s / %2$s"
 msgstr ""
 
 #. translators: %s: number of suggestions that could not be saved.
-#: includes/class-ajax.php:191
+#: includes/class-ajax.php:201
 msgid "%s suggestion could not be saved."
 msgid_plural "%s suggestions could not be saved."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-ajax.php:202
+#: includes/class-ajax.php:212
 msgid "Previous suggestions could not be cleared first, so the list may mix this run with an earlier one."
 msgstr ""
 
-#: includes/class-ajax.php:231
-#: includes/class-ajax.php:258
+#: includes/class-ajax.php:242
+#: includes/class-ajax.php:269
 msgid "Invalid suggestion ID."
 msgstr ""
 
-#: includes/class-ajax.php:235
+#: includes/class-ajax.php:246
 msgid "The suggestion could not be updated. Please try again."
 msgstr ""
 
-#: includes/class-ajax.php:240
+#: includes/class-ajax.php:251
 msgid "Suggestion dismissed."
 msgstr ""
 
-#: includes/class-ajax.php:271
+#: includes/class-ajax.php:282
 msgid "Suggestion not found."
 msgstr ""
 
-#: includes/class-ajax.php:278
+#: includes/class-ajax.php:289
 msgid "Post not found."
 msgstr ""
 
-#: includes/class-ajax.php:286
+#: includes/class-ajax.php:297
 msgid "This suggestion is out of date: its post or the page it links to is no longer published or is excluded from linking, so no change was made. Regenerate suggestions to refresh the list."
 msgstr ""
 
-#: includes/class-ajax.php:302
+#: includes/class-ajax.php:313
 msgid "The post content could not be processed, so no change was made."
 msgstr ""
 
-#: includes/class-ajax.php:306
+#: includes/class-ajax.php:317
 msgid "Could not find keyword in content."
 msgstr ""
 
-#: includes/class-ajax.php:310
+#: includes/class-ajax.php:321
 msgid "The post could not be saved, so no change was made."
 msgstr ""
 
-#: includes/class-ajax.php:315
+#: includes/class-ajax.php:326
 msgid "The link was added, but the suggestion could not be marked as applied. Refresh the page."
 msgstr ""
 
-#: includes/class-ajax.php:323
+#: includes/class-ajax.php:334
 msgid "Link added successfully!"
 msgstr ""
 

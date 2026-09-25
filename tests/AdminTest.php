@@ -10,6 +10,8 @@ namespace DragonInternalLinks\Tests;
 use DragonInternalLinks\Admin;
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../includes/class-crypto.php';
+require_once __DIR__ . '/../includes/class-ai-ranker.php';
 require_once __DIR__ . '/../includes/class-admin.php';
 
 final class AdminTest extends TestCase {
@@ -36,5 +38,24 @@ final class AdminTest extends TestCase {
 			'a &lt;b&gt; c',
 			Admin::highlight_keyword( 'a <b> c', "caf\xE9" )
 		);
+	}
+
+	public function test_settings_status_names_the_last_ai_failure(): void {
+		dragoninternallinks_test_reset();
+		$this->assertSame( '', Admin::ai_status_message() );
+
+		$GLOBALS['dragoninternallinks_test']['options']['dragoninternallinks_ai_last_error'] = array(
+			'time'     => 1758800000,
+			'provider' => 'anthropic',
+			'model'    => 'claude-3-5-haiku-20241022',
+			'code'     => 404,
+			'message'  => 'model not found',
+			'reason'   => 'http',
+		);
+
+		$message = Admin::ai_status_message();
+		$this->assertStringContainsString( 'claude-3-5-haiku-20241022', $message );
+		$this->assertStringContainsString( 'HTTP 404: model not found', $message );
+		$this->assertStringContainsString( 'built-in scoring', $message );
 	}
 }

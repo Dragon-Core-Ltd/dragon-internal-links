@@ -556,4 +556,21 @@ final class LinkerTest extends TestCase {
 		$out = $this->link( '<p>Learn C++today.</p>', 'C++' );
 		$this->assertSame( '<p>Learn <a href="' . self::URL . '">C++</a>today.</p>', $out );
 	}
+
+	public function test_keyword_with_ampersand_or_apostrophe_matches_its_html_spelling(): void {
+		$this->assertSame(
+			'<p>Compare <a href="' . self::URL . '">Salt &amp; Pepper Grinders</a> here.</p>',
+			$this->link( '<p>Compare Salt &amp; Pepper Grinders here.</p>', 'Salt & Pepper Grinders' )
+		);
+		$this->assertSame(
+			'<p>Our <a href="' . self::URL . '">Beginner&#8217;s Guide</a> helps.</p>',
+			$this->link( '<p>Our Beginner&#8217;s Guide helps.</p>', "Beginner's Guide" )
+		);
+		$this->assertSame(
+			'<p>Our <a href="' . self::URL . '">Beginner’s Guide</a> helps.</p>',
+			$this->link( '<p>Our Beginner’s Guide helps.</p>', "Beginner's Guide" )
+		);
+		// An entity is still never matched from its middle.
+		$this->assertNull( $this->link( '<p>Tom &amp; Jerry</p>', 'amp' ) );
+	}
 }

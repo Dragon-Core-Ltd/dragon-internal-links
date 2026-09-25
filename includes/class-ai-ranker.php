@@ -28,13 +28,41 @@ final class AI_Ranker {
 	);
 
 	/**
-	 * Default model per provider.
+	 * Default model per provider: the small current model of each family.
 	 */
 	public const DEFAULT_MODELS = array(
-		'openai'    => 'gpt-4o-mini',
-		'anthropic' => 'claude-3-5-haiku-20241022',
-		'google'    => 'gemini-2.0-flash',
+		'openai'    => 'gpt-6-luna',
+		'anthropic' => 'claude-haiku-4-5-20251001',
+		'google'    => 'gemini-3.5-flash-lite',
 	);
+
+	/**
+	 * Model-name prefixes of families the providers have retired.
+	 */
+	private const RETIRED_PREFIXES = array(
+		'claude-3-',
+		'claude-3.',
+		'claude-2',
+		'claude-instant',
+		'gemini-1.',
+		'gemini-pro',
+		'gemini-2.0-',
+		'gpt-3.5',
+		'gpt-4-',
+		'gpt-4.5',
+		'o1-preview',
+		'o1-mini',
+	);
+
+	/**
+	 * Option holding the last failed request, cleared by the next success.
+	 */
+	public const LAST_ERROR_OPTION = 'dragoninternallinks_ai_last_error';
+
+	/**
+	 * Option holding a one-time notice after a retired model was replaced.
+	 */
+	public const MODEL_CHANGED_OPTION = 'dragoninternallinks_ai_model_changed';
 
 	/**
 	 * Whether AI ranking is configured and enabled.
@@ -94,11 +122,9 @@ final class AI_Ranker {
 		}
 
 		// Accept a bare JSON object, or one embedded in stray prose/fences.
-		if ( ! preg_match( '/\{[^{}]*\}/s', $raw, $m ) ) {
-			return null;
-		}
-		$parsed = json_decode( $m[0], true );
+		$parsed = preg_match( '/\{[^{}]*\}/s', $raw, $m ) ? json_decode( $m[0], true ) : null;
 		if ( ! is_array( $parsed ) || array() === $parsed ) {
+			self::record_failure( $provider, $model, 200, '', 'unreadable' );
 			return null;
 		}
 
@@ -111,7 +137,120 @@ final class AI_Ranker {
 		}
 
 		// A response that scored almost nothing is not trustworthy.
-		return count( $scores ) >= (int) ceil( count( $candidates ) / 2 ) ? $scores : null;
+		if ( count( $scores ) < (int) ceil( count( $candidates ) / 2 ) ) {
+			self::record_failure( $provider, $model, 200, '', 'unreadable' );
+			return null;
+		}
+
+		if ( false !== get_option( self::LAST_ERROR_OPTION, false ) ) {
+			delete_option( self::LAST_ERROR_OPTION );
+		}
+
+		return $scores;
+	}
+
+	/**
+	 * Whether a model belongs to a family its provider has retired.
+	 *
+	 * @param string $model Model name.
+	 * @return bool
+	 */
+	public static function is_retired_model( string $model ): bool {
+		$model = strtolower( trim( $model ) );
+
+		foreach ( self::RETIRED_PREFIXES as $prefix ) {
+			if ( str_starts_with( $model, $prefix ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Move a saved retired model to the provider default (a blank Model
+	 * setting), verified by re-read, and leave a one-time notice saying so.
+	 */
+	public static function migrate_retired_model(): void {
+		$saved = trim( (string) get_option( 'dragoninternallinks_ai_model', '' ) );
+		if ( '' === $saved || ! self::is_retired_model( $saved ) ) {
+			return;
+		}
+
+		update_option( 'dragoninternallinks_ai_model', '' );
+		if ( '' !== get_option( 'dragoninternallinks_ai_model', '' ) ) {
+			return;
+		}
+
+		$provider = self::provider();
+		update_option(
+			self::MODEL_CHANGED_OPTION,
+			array(
+				'from'     => $saved,
+				'to'       => self::DEFAULT_MODELS[ $provider ],
+				'provider' => $provider,
+			),
+			false
+		);
+	}
+
+	/**
+	 * The last failed request, or null when the last request succeeded.
+	 *
+	 * @return array{time:int,provider:string,model:string,code:int,message:string,reason:string}|null
+	 */
+	public static function last_error(): ?array {
+		$error = get_option( self::LAST_ERROR_OPTION, null );
+		return is_array( $error ) ? $error : null;
+	}
+
+	/**
+	 * Store why a request fell back to the built-in scoring, for the Settings
+	 * screen. The API key is masked out of the provider's message.
+	 *
+	 * @param string $provider Provider slug.
+	 * @param string $model    Model name.
+	 * @param int    $code     HTTP status, 0 when no response arrived.
+	 * @param string $message  Provider or transport message.
+	 * @param string $reason   'http', 'transport' or 'unreadable'.
+	 */
+	private static function record_failure( string $provider, string $model, int $code, string $message, string $reason ): void {
+		$key = self::api_key();
+		if ( '' !== $key ) {
+			$message = str_replace( $key, '***', $message );
+		}
+
+		$message = trim( (string) preg_replace( '/\s+/', ' ', wp_strip_all_tags( $message ) ) );
+
+		update_option(
+			self::LAST_ERROR_OPTION,
+			array(
+				'time'     => time(),
+				'provider' => $provider,
+				'model'    => $model,
+				'code'     => $code,
+				'message'  => mb_substr( $message, 0, 300 ),
+				'reason'   => $reason,
+			),
+			false
+		);
+	}
+
+	/**
+	 * Whether an OpenAI model is a reasoning model (o-series, GPT-5 and
+	 * later), which rejects temperature and max_tokens.
+	 *
+	 * @param string $model Model name.
+	 * @return bool
+	 */
+	public static function is_openai_reasoning_model( string $model ): bool {
+		$model = strtolower( $model );
+
+		if ( 1 === preg_match( '/^o\d/', $model ) ) {
+			return true;
+		}
+
+		return 1 === preg_match( '/^gpt-(\d+)/', $model, $m ) && (int) $m[1] >= 5;
 	}
 
 	/**
@@ -145,7 +284,7 @@ final class AI_Ranker {
 	 */
 	public static function model(): string {
 		$provider = self::provider();
-		$default  = self::DEFAULT_MODELS[ $provider ] ?? 'gpt-4o-mini';
+		$default  = self::DEFAULT_MODELS[ $provider ] ?? self::DEFAULT_MODELS['openai'];
 		$model    = trim( (string) get_option( 'dragoninternallinks_ai_model', '' ) );
 
 		if ( '' === $model || ! self::is_allowed_model( $provider, $model ) ) {
@@ -218,19 +357,28 @@ final class AI_Ranker {
 		if ( 'openai' === $provider ) {
 			$url                              = self::ENDPOINTS['openai'];
 			$args['headers']['Authorization'] = 'Bearer ' . $key;
-			$args['body']                     = wp_json_encode(
-				array(
-					'model'       => $model,
-					'messages'    => array(
-						array(
-							'role'    => 'user',
-							'content' => $prompt,
-						),
+			$body                             = array(
+				'model'                 => $model,
+				'messages'              => array(
+					array(
+						'role'    => 'user',
+						'content' => $prompt,
 					),
-					'temperature' => 0,
-					'max_tokens'  => 500,
-				)
+				),
+				'max_completion_tokens' => 500,
 			);
+
+			if ( self::is_openai_reasoning_model( $model ) ) {
+				// Reasoning tokens count against the cap, so leave room for them.
+				$body['max_completion_tokens'] = 4000;
+				if ( str_starts_with( strtolower( $model ), 'gpt-6' ) ) {
+					$body['reasoning_effort'] = 'none';
+				}
+			} else {
+				$body['temperature'] = 0;
+			}
+
+			$args['body'] = wp_json_encode( $body );
 		} elseif ( 'anthropic' === $provider ) {
 			$url                                  = self::ENDPOINTS['anthropic'];
 			$args['headers']['x-api-key']         = $key;
@@ -266,12 +414,22 @@ final class AI_Ranker {
 		}
 
 		$response = wp_safe_remote_post( $url, $args );
-		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+		if ( is_wp_error( $response ) ) {
+			self::record_failure( $provider, $model, 0, $response->get_error_message(), 'transport' );
 			return null;
 		}
 
+		$code = (int) wp_remote_retrieve_response_code( $response );
 		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code ) {
+			$message = is_array( $body ) ? ( $body['error']['message'] ?? ( $body[0]['error']['message'] ?? '' ) ) : '';
+			self::record_failure( $provider, $model, $code, is_string( $message ) ? $message : '', 'http' );
+			return null;
+		}
+
 		if ( ! is_array( $body ) ) {
+			self::record_failure( $provider, $model, $code, '', 'unreadable' );
 			return null;
 		}
 
@@ -283,7 +441,12 @@ final class AI_Ranker {
 			$text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
 		}
 
-		return is_string( $text ) ? $text : null;
+		if ( ! is_string( $text ) ) {
+			self::record_failure( $provider, $model, $code, '', 'unreadable' );
+			return null;
+		}
+
+		return $text;
 	}
 
 	/**

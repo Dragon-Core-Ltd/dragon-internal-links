@@ -43,6 +43,75 @@ class Admin {
 		add_action( 'manage_posts_custom_column', array( $this, 'render_links_column' ), 10, 2 );
 		add_filter( 'manage_pages_columns', array( $this, 'add_links_column' ) );
 		add_action( 'manage_pages_custom_column', array( $this, 'render_links_column' ), 10, 2 );
+
+		// A saved model its provider has retired moves to the default once.
+		add_action( 'admin_init', array( AI_Ranker::class, 'migrate_retired_model' ) );
+		add_action( 'admin_notices', array( $this, 'render_model_changed_notice' ) );
+	}
+
+	/**
+	 * One-time notice after a retired AI model was replaced (see
+	 * AI_Ranker::migrate_retired_model()), on this plugin's own screen.
+	 */
+	public function render_model_changed_notice(): void {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || 'tools_page_dragon-internal-links' !== $screen->id || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$changed = get_option( AI_Ranker::MODEL_CHANGED_OPTION, null );
+		if ( ! is_array( $changed ) ) {
+			return;
+		}
+		delete_option( AI_Ranker::MODEL_CHANGED_OPTION );
+
+		printf(
+			'<div class="notice notice-info is-dismissible"><p>%s</p></div>',
+			esc_html(
+				sprintf(
+					/* translators: 1: old AI model id, 2: new AI model id */
+					__( 'The AI model %1$s has been retired by its provider, so AI ranking now uses %2$s. You can choose another model in Settings.', 'dragon-internal-links' ),
+					(string) ( $changed['from'] ?? '' ),
+					(string) ( $changed['to'] ?? '' )
+				)
+			)
+		);
+	}
+
+	/**
+	 * Why the last AI ranking request fell back to the built-in scoring, or ''
+	 * when it succeeded.
+	 *
+	 * @return string
+	 */
+	public static function ai_status_message(): string {
+		$error = AI_Ranker::last_error();
+		if ( null === $error ) {
+			return '';
+		}
+
+		$when = wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) ( $error['time'] ?? 0 ) );
+		$code = (int) ( $error['code'] ?? 0 );
+
+		if ( 'unreadable' === ( $error['reason'] ?? '' ) ) {
+			$detail = __( 'the reply could not be read as scores', 'dragon-internal-links' );
+		} elseif ( 0 === $code ) {
+			$detail = (string) ( $error['message'] ?? '' );
+		} elseif ( '' !== (string) ( $error['message'] ?? '' ) ) {
+			/* translators: 1: HTTP status code, 2: error message from the AI provider */
+			$detail = sprintf( __( 'HTTP %1$s: %2$s', 'dragon-internal-links' ), (string) $code, (string) $error['message'] );
+		} else {
+			/* translators: %s: HTTP status code */
+			$detail = sprintf( __( 'HTTP %s', 'dragon-internal-links' ), (string) $code );
+		}
+
+		return sprintf(
+			/* translators: 1: date and time, 2: AI model id, 3: reason the request failed */
+			__( 'The last AI ranking request (%1$s, model %2$s) failed, so suggestions used the built-in scoring: %3$s', 'dragon-internal-links' ),
+			(string) $when,
+			(string) ( $error['model'] ?? '' ),
+			$detail
+		);
 	}
 
 	/**
@@ -332,7 +401,10 @@ class Admin {
 			}
 		}
 
-		// AI re-ranking (bring-your-own key).
+		// AI re-ranking (bring-your-own key). A recorded failure belongs to the
+		// provider, model and key it happened with, so changing any clears it.
+		$ai_before = array( AI_Ranker::provider(), AI_Ranker::model(), (string) get_option( 'dragoninternallinks_ai_api_key', '' ) );
+
 		update_option( 'dragoninternallinks_ai_enabled', isset( $_POST['dragoninternallinks_ai_enabled'] ) );
 
 		if ( isset( $_POST['dragoninternallinks_ai_provider'] ) ) {
@@ -355,6 +427,10 @@ class Admin {
 				// The masked placeholder means "keep the stored key".
 				update_option( 'dragoninternallinks_ai_api_key', AI_Ranker::encrypt_key( $submitted ) );
 			}
+		}
+
+		if ( array( AI_Ranker::provider(), AI_Ranker::model(), (string) get_option( 'dragoninternallinks_ai_api_key', '' ) ) !== $ai_before ) {
+			delete_option( AI_Ranker::LAST_ERROR_OPTION );
 		}
 
 		update_option( 'dragoninternallinks_delete_data_on_uninstall', isset( $_POST['dragoninternallinks_delete_data'] ) );

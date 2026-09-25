@@ -9,6 +9,7 @@ namespace DragonInternalLinks\Tests;
 
 use DragonInternalLinks\Analyzer;
 use DragonInternalLinks\Scanner;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../includes/class-scanner.php';
@@ -242,10 +243,41 @@ final class AnalyzerTest extends TestCase {
 		$this->assertSame( array(), $this->call_private( $analyzer, 'extract_keywords', array( 'The Coffee Beans', 4 ) ) );
 		// A minimum of one allows a single-word phrase.
 		$this->assertSame( array( 'Espresso' ), $this->call_private( $analyzer, 'extract_keywords', array( 'Espresso', 1 ) ) );
+		// The short phrase is a run of adjacent words, never words joined across a stop word.
 		$this->assertSame(
-			array( 'Guide to Coffee Beans', 'Guide Coffee Beans' ),
+			array( 'Guide to Coffee Beans' ),
 			$this->call_private( $analyzer, 'extract_keywords', array( 'Guide to Coffee Beans', 3 ) )
 		);
+		$this->assertSame(
+			array( 'Best Coffee Grinders for Beginners', 'Best Coffee Grinders' ),
+			$this->call_private( $analyzer, 'extract_keywords', array( 'Best Coffee Grinders for Beginners', 3 ) )
+		);
+	}
+
+	/**
+	 * @return iterable<string,array{0:string,1:string}>
+	 */
+	public static function punctuated_titles(): iterable {
+		yield 'apostrophe' => array( "Beginner's Guide to Espresso Machines", "<p>Read our Beginner's Guide to Espresso Machines before buying.</p>" );
+		yield 'curly apostrophe in content' => array( "Beginner's Guide to Espresso Machines", '<p>Read our Beginner’s Guide to Espresso Machines before buying.</p>' );
+		yield 'apostrophe entity in content' => array( "Beginner's Guide to Espresso Machines", '<p>Read our Beginner&#8217;s Guide to Espresso Machines before buying.</p>' );
+		yield 'hyphen' => array( 'Wi-Fi Setup for Smart Homes', '<p>See Wi-Fi Setup for Smart Homes for details.</p>' );
+		yield 'colon' => array( 'Espresso: The Complete Guide', '<p>Our Espresso: The Complete Guide covers it.</p>' );
+		yield 'ampersand' => array( 'Salt & Pepper Grinders', '<p>Compare Salt &amp; Pepper Grinders here.</p>' );
+		yield 'encoded ampersand in title' => array( 'Salt &amp; Pepper Grinders', '<p>Compare Salt &amp; Pepper Grinders here.</p>' );
+		yield 'trailing question mark' => array( 'What Is Cold Brew Coffee?', '<p>Wondering what is cold brew coffee and why it tastes sweet.</p>' );
+	}
+
+	#[DataProvider( 'punctuated_titles' )]
+	public function test_titles_with_punctuation_produce_a_suggestion( string $title, string $content ): void {
+		$analyzer = new Analyzer( new Scanner() );
+		$found    = null;
+
+		foreach ( $this->call_private( $analyzer, 'extract_keywords', array( $title, 3 ) ) as $keyword ) {
+			$found = $found ?? $this->call_private( $analyzer, 'find_keyword_context', array( $content, $keyword ) );
+		}
+
+		$this->assertNotNull( $found );
 	}
 
 	public function test_a_keyword_inside_a_longer_word_is_not_a_match(): void {

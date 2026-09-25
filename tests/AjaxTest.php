@@ -29,6 +29,25 @@ final class AjaxTestScanner extends Scanner {
 	}
 }
 
+/**
+ * Scanner and analyzer whose batch results each test sets.
+ */
+final class AjaxTestBatchScanner extends Scanner {
+	public array $result = array();
+
+	public function scan_all( int $batch_size = 50, int $offset = 0 ): array {
+		return $this->result;
+	}
+}
+
+final class AjaxTestBatchAnalyzer extends Analyzer {
+	public array $result = array();
+
+	public function generate_all_suggestions( int $batch_size = 20, int $offset = 0 ): array {
+		return $this->result;
+	}
+}
+
 final class AjaxTest extends TestCase {
 
 	private AjaxTestScanner $scanner;
@@ -230,5 +249,74 @@ final class AjaxTest extends TestCase {
 		$this->assertFalse( $response->success );
 		$this->assertSame( array(), dragoninternallinks_test_calls( 'wp_update_post' ) );
 		$this->assertSame( array(), $this->status_updates() );
+	}
+
+	private function send( callable $handler ): \DragonInternalLinks_Test_Json_Response {
+		try {
+			$handler();
+		} catch ( \DragonInternalLinks_Test_Json_Response $response ) {
+			return $response;
+		}
+		$this->fail( 'Handler did not send a JSON response.' );
+	}
+
+	public function test_scan_failures_add_up_across_batches_and_hold_the_page(): void {
+		$scanner         = new AjaxTestBatchScanner();
+		$scanner->result = array(
+			'scanned'  => 50,
+			'total'    => 100,
+			'offset'   => 100,
+			'complete' => true,
+			'failed'   => 2,
+			'pruned'   => true,
+		);
+		$ajax            = new Ajax( $scanner, new Analyzer( $scanner ) );
+
+		$_POST = array(
+			'offset' => '50',
+			'failed' => '3',
+		);
+		$response = $this->send( array( $ajax, 'handle_scan_all' ) );
+
+		$this->assertTrue( $response->success );
+		$this->assertSame( 5, $response->data['failed'] );
+		$this->assertStringContainsString( '5 posts could not be indexed', $response->data['message'] );
+		$this->assertTrue( $response->data['warning'] );
+
+		$_POST            = array( 'offset' => '0' );
+		$scanner->result['failed'] = 0;
+		$response = $this->send( array( $ajax, 'handle_scan_all' ) );
+		$this->assertSame( 0, $response->data['failed'] );
+		$this->assertFalse( $response->data['warning'] );
+
+		$scanner->result['pruned'] = false;
+		$response = $this->send( array( $ajax, 'handle_scan_all' ) );
+		$this->assertTrue( $response->data['warning'] );
+	}
+
+	public function test_suggestion_failures_add_up_across_batches_and_hold_the_page(): void {
+		$scanner          = new Scanner();
+		$analyzer         = new AjaxTestBatchAnalyzer( $scanner );
+		$analyzer->result = array(
+			'generated' => 4,
+			'failed'    => 1,
+			'stale'     => false,
+			'offset'    => 40,
+			'total'     => 40,
+			'done'      => true,
+		);
+		$ajax             = new Ajax( $scanner, $analyzer );
+
+		$_POST = array(
+			'offset' => '20',
+			'failed' => '2',
+			'stale'  => '1',
+		);
+		$response = $this->send( array( $ajax, 'handle_generate_suggestions' ) );
+
+		$this->assertSame( 3, $response->data['failed'] );
+		$this->assertStringContainsString( '3 suggestions could not be saved', $response->data['message'] );
+		$this->assertTrue( $response->data['stale'] );
+		$this->assertTrue( $response->data['warning'] );
 	}
 }

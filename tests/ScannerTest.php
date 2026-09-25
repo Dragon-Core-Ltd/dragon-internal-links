@@ -152,4 +152,57 @@ final class ScannerTest extends TestCase {
 		$this->assertFalse( $scanner->scan_failed() );
 		$this->assertContains( 'COMMIT', array_column( $GLOBALS['wpdb']->calls_to( 'query' ), 0 ) );
 	}
+
+	private function link_row( int $target, ?string $status, ?string $type = 'post', int $parent = 0, ?string $parent_status = null, string $url = '/blog/x/' ): array {
+		return array(
+			'id'             => $target,
+			'source_post_id' => 5,
+			'target_post_id' => $target,
+			'link_url'       => $url,
+			'source_title'   => 'Source',
+			'target_title'   => null === $status ? null : 'Target',
+			'target_status'  => $status,
+			'target_type'    => null === $status ? null : $type,
+			'target_parent'  => null === $status ? null : (string) $parent,
+			'parent_status'  => $parent_status,
+		);
+	}
+
+	public function test_attachment_links_are_broken_only_when_the_attachment_is(): void {
+		$uploads = sys_get_temp_dir() . '/dil-uploads-' . uniqid();
+		mkdir( $uploads . '/2026/09', 0777, true );
+		file_put_contents( $uploads . '/2026/09/kept.pdf', 'x' );
+		$GLOBALS['dragoninternallinks_test']['uploads'] = array(
+			'basedir' => $uploads,
+			'baseurl' => 'https://Example.test/blog/wp-content/uploads',
+		);
+
+		$GLOBALS['wpdb']->returns['get_results'] = array(
+			$this->link_row( 11, 'inherit', 'attachment', 0 ),
+			$this->link_row( 12, 'inherit', 'attachment', 5, 'publish' ),
+			$this->link_row( 13, 'inherit', 'attachment', 5, 'private' ),
+			$this->link_row( 14, 'inherit', 'attachment', 99, null ),
+			$this->link_row( 15, 'inherit', 'attachment', 6, 'draft' ),
+			$this->link_row( 16, 'trash', 'attachment', 0 ),
+			$this->link_row( 17, 'draft', 'post' ),
+			$this->link_row( 18, null ),
+			$this->link_row( 19, null, null, 0, null, 'https://example.test/blog/wp-content/uploads/2026/09/kept.pdf?ver=2' ),
+			$this->link_row( 20, 'trash', 'attachment', 0, null, '/blog/wp-content/uploads/2026/09/kept.pdf' ),
+			$this->link_row( 21, null, null, 0, null, '/blog/wp-content/uploads/2026/09/gone.pdf' ),
+			$this->link_row( 22, null, null, 0, null, '/blog/wp-content/uploads/../../../etc/passwd' ),
+		);
+
+		$broken = ( new Scanner() )->find_broken_links();
+
+		unlink( $uploads . '/2026/09/kept.pdf' );
+		rmdir( $uploads . '/2026/09' );
+		rmdir( $uploads . '/2026' );
+		rmdir( $uploads );
+
+		$this->assertSame( array( 15, 16, 17, 18, 21, 22 ), array_map( 'intval', array_column( $broken, 'target_post_id' ) ) );
+
+		// An attachment under an unpublished post is shown with its parent's status.
+		$this->assertSame( 'draft', $broken[0]['target_status'] );
+		$this->assertSame( 'trash', $broken[1]['target_status'] );
+	}
 }

@@ -16,14 +16,15 @@
         $status.text(dilAdmin.i18n.scanning);
         $progress.show();
 
-        function scanBatch(offset) {
+        function scanBatch(offset, failed) {
             $.ajax({
                 url: dilAdmin.ajaxUrl,
                 type: 'POST',
                 data: {
                     action: 'dragoninternallinks_scan_all',
                     nonce: dilAdmin.nonce,
-                    offset: offset
+                    offset: offset,
+                    failed: failed
                 },
                 success: function(response) {
                     if (response.success) {
@@ -37,12 +38,15 @@
                             $btn.prop('disabled', false);
                             $status.text(dilAdmin.i18n.scanComplete);
 
-                            setTimeout(function() {
-                                location.reload();
-                            }, 1500);
+                            // A warning stays on screen until the user reloads.
+                            if (!data.warning) {
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 1500);
+                            }
                         } else {
                             // Continue with next batch
-                            scanBatch(data.offset);
+                            scanBatch(data.offset, data.failed);
                         }
                     } else {
                         $btn.prop('disabled', false);
@@ -58,7 +62,7 @@
             });
         }
 
-        scanBatch(0);
+        scanBatch(0, 0);
     });
 
     // Generate Suggestions (resumable: loops through every post, not just a batch)
@@ -69,14 +73,16 @@
         $btn.prop('disabled', true);
         $status.text(dilAdmin.i18n.generating);
 
-        function generateBatch(offset) {
+        function generateBatch(offset, failed, stale) {
             $.ajax({
                 url: dilAdmin.ajaxUrl,
                 type: 'POST',
                 data: {
                     action: 'dragoninternallinks_generate_suggestions',
                     nonce: dilAdmin.nonce,
-                    offset: offset
+                    offset: offset,
+                    failed: failed,
+                    stale: stale ? 1 : 0
                 },
                 success: function(response) {
                     if (response.success) {
@@ -84,11 +90,14 @@
                         $status.text(data.message);
                         if (data.done) {
                             $btn.prop('disabled', false);
-                            setTimeout(function() {
-                                location.reload();
-                            }, 1500);
+                            // A warning stays on screen until the user reloads.
+                            if (!data.warning) {
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 1500);
+                            }
                         } else {
-                            generateBatch(data.offset);
+                            generateBatch(data.offset, data.failed, data.stale);
                         }
                     } else {
                         $btn.prop('disabled', false);
@@ -102,7 +111,7 @@
             });
         }
 
-        generateBatch(0);
+        generateBatch(0, 0, false);
     });
 
     // Apply Suggestion

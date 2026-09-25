@@ -1027,7 +1027,12 @@ class Scanner {
 	}
 
 	/**
-	 * Find broken internal links (links to non-existent or non-published posts)
+	 * Find broken internal links: links to deleted or unpublished posts.
+	 *
+	 * An attachment is published with its parent (status "inherit"), so a
+	 * media link counts as broken only when the attachment is gone or its
+	 * parent post is unpublished. A link to a file that exists under the
+	 * uploads directory is never broken.
 	 *
 	 * @return array Broken links
 	 */
@@ -1042,10 +1047,14 @@ class Scanner {
 				"SELECT l.*,
 						sp.post_title as source_title,
 						tp.post_title as target_title,
-						tp.post_status as target_status
+						tp.post_status as target_status,
+						tp.post_type as target_type,
+						tp.post_parent as target_parent,
+						pp.post_status as parent_status
 				 FROM %i l
 				 JOIN {$wpdb->posts} sp ON l.source_post_id = sp.ID
 				 LEFT JOIN {$wpdb->posts} tp ON l.target_post_id = tp.ID
+				 LEFT JOIN {$wpdb->posts} pp ON tp.post_parent > 0 AND pp.ID = tp.post_parent
 				 WHERE tp.ID IS NULL
 					OR tp.post_status NOT IN ('publish', 'private')
 				 ORDER BY l.source_post_id ASC",
@@ -1054,6 +1063,88 @@ class Scanner {
 			ARRAY_A
 		);
 
-		return $results ? $results : array();
+		$broken = array();
+		foreach ( (array) $results as $row ) {
+			if ( ! is_array( $row ) || ! $this->is_broken_target( $row ) ) {
+				continue;
+			}
+
+			// The badge shows why: an attachment is as unpublished as its parent.
+			if ( 'attachment' === ( $row['target_type'] ?? '' ) && 'inherit' === ( $row['target_status'] ?? '' ) && ! empty( $row['parent_status'] ) ) {
+				$row['target_status'] = $row['parent_status'];
+			}
+
+			$broken[] = $row;
+		}
+
+		return $broken;
+	}
+
+	/**
+	 * Whether a find_broken_links() row points at something a visitor cannot
+	 * reach.
+	 *
+	 * @param array $row Link row with target_status, target_type, target_parent,
+	 *                   parent_status and link_url.
+	 * @return bool
+	 */
+	private function is_broken_target( array $row ): bool {
+		$status = (string) ( $row['target_status'] ?? '' );
+
+		if ( in_array( $status, array( 'publish', 'private' ), true ) ) {
+			return false;
+		}
+
+		if ( 'attachment' === ( $row['target_type'] ?? '' ) && 'inherit' === $status ) {
+			$parent        = (int) ( $row['target_parent'] ?? 0 );
+			$parent_status = (string) ( $row['parent_status'] ?? '' );
+
+			// Unattached, or its parent no longer exists: served on its own.
+			if ( 0 === $parent || '' === $parent_status || in_array( $parent_status, array( 'publish', 'private' ), true ) ) {
+				return false;
+			}
+		}
+
+		return ! $this->is_uploaded_file( (string) ( $row['link_url'] ?? '' ) );
+	}
+
+	/**
+	 * Whether a link points at a file that exists under the uploads directory.
+	 *
+	 * @param string $href Link href as written in the content.
+	 * @return bool
+	 */
+	private function is_uploaded_file( string $href ): bool {
+		$uploads = wp_upload_dir( null, false );
+		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) {
+			return false;
+		}
+
+		$url = $this->resolve_url( $href, $this->site_url );
+		$dir = $this->resolve_url( (string) $uploads['baseurl'] . '/', $this->site_url );
+		if ( null === $url || null === $dir ) {
+			return false;
+		}
+
+		if ( self::comparable_host( $url ) !== self::comparable_host( $dir ) ) {
+			return false;
+		}
+
+		$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+		$base = (string) wp_parse_url( $dir, PHP_URL_PATH );
+		if ( '' === $base || ! str_starts_with( $path, $base ) ) {
+			return false;
+		}
+
+		$relative = rawurldecode( substr( $path, strlen( $base ) ) );
+		if ( '' === $relative || str_contains( $relative, "\0" ) ) {
+			return false;
+		}
+
+		$root = realpath( (string) $uploads['basedir'] );
+		$file = realpath( (string) $uploads['basedir'] . '/' . $relative );
+
+		return false !== $root && false !== $file && is_file( $file )
+			&& str_starts_with( $file, rtrim( $root, '/\\' ) . DIRECTORY_SEPARATOR );
 	}
 }
