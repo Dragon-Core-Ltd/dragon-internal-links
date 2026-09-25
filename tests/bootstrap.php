@@ -209,7 +209,7 @@ function number_format_i18n( $number, $decimals = 0 ) {
 
 function esc_html__( $text, $domain = 'default' ) {
 	unset( $domain );
-	return $text;
+	return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8', false );
 }
 
 // Byte-preserving escape so invalid UTF-8 reaches the code under test
@@ -247,7 +247,7 @@ function esc_html( $text ) {
 		return '';
 	}
 
-	return str_replace( array( '&', '<', '>', '"', "'" ), array( '&amp;', '&lt;', '&gt;', '&quot;', '&#039;' ), $text );
+	return htmlspecialchars( $text, ENT_QUOTES, 'UTF-8', false );
 }
 
 function esc_attr( $text ) {
