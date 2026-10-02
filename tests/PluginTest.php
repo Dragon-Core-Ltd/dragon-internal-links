@@ -9,6 +9,7 @@
 namespace DragonInternalLinks\Tests;
 
 use DragonInternalLinks\Plugin;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../includes/class-scanner.php';
@@ -207,5 +208,51 @@ final class PluginTest extends TestCase {
 		include __DIR__ . '/../uninstall.php';
 
 		$this->assertSame( array(), $GLOBALS['wpdb']->calls_to( 'prepare' ) );
+	}
+
+	public static function opt_in_values(): array {
+		return array(
+			'true'          => array( true, true ),
+			'int 1'         => array( 1, true ),
+			'string 1'      => array( '1', true ),
+			'string true'   => array( 'true', true ),
+			'upper TRUE'    => array( 'TRUE', true ),
+			'padded yes'    => array( ' yes ', true ),
+			'on'            => array( 'on', true ),
+			'false'         => array( false, false ),
+			'int 0'         => array( 0, false ),
+			'empty string'  => array( '', false ),
+			'string 0'      => array( '0', false ),
+			'string false'  => array( 'false', false ),
+			'no'            => array( 'no', false ),
+			'off'           => array( 'off', false ),
+			'capital No'    => array( 'No', false ),
+			'random string' => array( 'random', false ),
+			'null'          => array( null, false ),
+			'empty array'   => array( array(), false ),
+		);
+	}
+
+	#[DataProvider( 'opt_in_values' )]
+	public function test_uninstall_deletes_only_on_a_clear_yes( $stored, bool $deletes ): void {
+		$GLOBALS['dragoninternallinks_test']['options'] = array(
+			'dragoninternallinks_delete_data_on_uninstall' => $stored,
+			'dragoninternallinks_settings'                 => array( 'kept' => true ),
+		);
+
+		include __DIR__ . '/../uninstall.php';
+
+		$dropped = array();
+		foreach ( $GLOBALS['wpdb']->calls_to( 'prepare' ) as $args ) {
+			$dropped[] = $args[1];
+		}
+
+		if ( $deletes ) {
+			$this->assertSame( array( 'wp_dil_links', 'wp_dil_stats', 'wp_dil_suggestions' ), $dropped );
+			$this->assertCount( 6, $GLOBALS['wpdb']->calls_to( 'query' ) );
+		} else {
+			$this->assertSame( array(), $dropped );
+			$this->assertSame( array(), $GLOBALS['wpdb']->calls_to( 'query' ) );
+		}
 	}
 }

@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.11
+Stable tag: 1.1.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,9 @@ Yes! Configure which post types to scan in Settings.
 
 == Changelog ==
 
+= 1.1.12 =
+* Fixed: uninstall deletes data only when the opt-in is clearly on (1, true, yes or on), not for a value set to "false" or "no".
+
 = 1.1.11 =
 * Fixed: links to trashed, deleted or draft posts disappeared from Link Health after the next scan. They are now reported on every scan until fixed.
 * Suggestions come from each post's distinctive topic phrases, not only its exact title.
@@ -160,6 +163,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.12 =
+Uninstall deletes data only when the opt-in is clearly on.
 
 = 1.1.11 =
 Link Health keeps reporting links to removed posts, and suggestions find more relevant links.

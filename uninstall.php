@@ -21,7 +21,12 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 $dragoninternallinks_uninstall_site = static function (): void {
 	global $wpdb;
 
-	if ( ! get_option( 'dragoninternallinks_delete_data_on_uninstall' ) ) {
+	// Only a clear yes counts: the words false, no and off are truthy strings.
+	$opt_in = get_option( 'dragoninternallinks_delete_data_on_uninstall' );
+	if ( is_string( $opt_in ) ) {
+		$opt_in = strtolower( trim( $opt_in ) );
+	}
+	if ( ! in_array( $opt_in, array( true, 1, '1', 'true', 'yes', 'on' ), true ) ) {
 		return;
 	}
 
