@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.12
+Stable tag: 1.1.13
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,7 @@ Dragon Internal Links helps you build a stronger internal link structure for bet
 
 * **Link Scanner** - Automatically scans all posts and pages for internal links
 * **Orphan Detection** - Find content with no internal links pointing to it
-* **Smart Link Suggestions** - Contextual linking opportunities ranked by real document similarity (TF-IDF), with optional AI re-ranking using your own OpenAI, Anthropic, or Google key — stored encrypted, no extra account
+* **Smart Link Suggestions** - Contextual linking opportunities ranked by real document similarity (TF-IDF), with optional AI re-ranking using your own OpenAI, Anthropic, or Google key - stored encrypted, no extra account
 * **Link Health** - Detect broken internal links to deleted or draft posts
 * **Dashboard** - Visual overview of your site's internal link structure
 
@@ -36,24 +36,28 @@ ranked locally, and no data leaves your server.
 
 AI re-ranking is an optional feature that is off until you enable it and enter
 your own API key. When it is on, the plugin asks a third-party AI provider to
-score the link candidates it has already found locally. This happens while
-suggestions are being generated for a post.
+score the link candidates it has already found locally. One request is sent
+per post each time suggestions are generated: when you click Generate
+Suggestions, and again on every scheduled full scan (daily by default, or
+weekly), so the requests repeat on every run.
 
-Each request contains the source post's title and an extract of its text
-(shortened to roughly 1,500 characters), plus the title, excerpt (roughly 240
-characters) and proposed anchor text of each candidate page, along with the
-model you selected and your API key (sent in a request header for every
-provider, never in the URL). Full post content is never sent, no user data is
-sent, and nothing is sent to Dragon Core. If the provider is unreachable the plugin falls back to its local
-ranking.
+Each request contains the source post's title and up to about 1,500
+characters of its text (a post shorter than that is sent whole), plus the
+title, an extract (roughly 240 characters) and the proposed anchor text of
+each candidate page, along with the model you selected and your API key (sent
+in a request header for every provider, never in the URL). Password-protected
+posts are never sent, as the source or as a candidate. No user data is sent,
+and nothing is sent to Dragon Core. The key is kept for the provider it was
+entered for: if you change provider, enter that provider's key. If the
+provider is unreachable the plugin falls back to its local ranking.
 
 You choose one provider, and only that provider is contacted:
 
-* **OpenAI** — Terms: https://openai.com/policies/terms-of-use/ ·
+* **OpenAI** - Terms: https://openai.com/policies/terms-of-use/ ·
   Privacy: https://openai.com/policies/privacy-policy/
-* **Anthropic Claude** — Terms: https://www.anthropic.com/legal/consumer-terms ·
+* **Anthropic Claude** - Terms: https://www.anthropic.com/legal/consumer-terms ·
   Privacy: https://www.anthropic.com/legal/privacy
-* **Google Gemini** — Terms: https://policies.google.com/terms ·
+* **Google Gemini** - Terms: https://policies.google.com/terms ·
   Privacy: https://policies.google.com/privacy
 
 Your provider may charge for these requests and applies its own data-retention
@@ -87,7 +91,27 @@ No. Scanning happens in the background and link data is cached. The plugin adds 
 
 Yes! Configure which post types to scan in Settings.
 
+= Does it work in every language? =
+
+Keywords are matched as whole words, so suggestions work in languages that put spaces between words, in any script (Latin, Cyrillic, Greek and others). Languages written without spaces between words, such as Chinese, Japanese and Thai, are not matched, so they get no suggestions.
+
 == Changelog ==
+
+= 1.1.13 =
+* Fixed: an AI API key is now saved exactly as you type it. A key containing a percent sign followed by two hex digits, an angle bracket or a double space was altered when saved.
+* Hardened: the settings form checks its security token and your permission in the same step that saves, and reads every field through a WordPress sanitizer.
+* Tidied: only valid post type names and category IDs are stored from the settings form.
+* Fixed: your AI API key now belongs to the provider you entered it for. Changing provider without entering a new key removes the old key, so it is never sent to another provider.
+* Fixed: password-protected posts are left out of suggestions, so their text is never sent to the AI provider or shown as a suggestion's context.
+* Fixed: a page that gains its first link through Apply or an edit leaves the Orphan Posts list straight away, and one that loses its last link joins it, without waiting for the next full scan.
+* Fixed: links are no longer added inside code samples, or inside a bare URL or email address such as an embed's URL.
+* Fixed: suggestions in languages with multibyte letters are no longer lost when the context was cut mid-character, and capitalised non-English words now count as the same word.
+* Fixed: a link from a post to itself no longer stops it being reported as an orphan.
+* Fixed: a suggestion that was already applied or dismissed (for example in another tab) cannot be applied again.
+* The Orphan Posts headings show the real totals, with a note when only the first posts are listed.
+* The plugin's database tables are checked after they are created, so a failed setup is retried instead of breaking every scan.
+* Uninstall (when you opt in) removes only this plugin's own old settings, not other plugins' settings that share the old dil_ prefix.
+* Clearer wording about what AI ranking sends and how often, and that languages written without spaces between words are not matched.
 
 = 1.1.12 =
 * Fixed: uninstall deletes data only when the opt-in is clearly on (1, true, yes or on), not for a value set to "false" or "no".
@@ -135,18 +159,18 @@ Yes! Configure which post types to scan in Settings.
 
 = 1.1.3 =
 * Documentation: full external-services disclosure for optional AI re-ranking.
-* Fix: a never-scanned site no longer shows "all posts have links" — it now prompts the first scan.
+* Fix: a never-scanned site no longer shows "all posts have links" - it now prompts the first scan.
 * Reliability: scheduled scans on large sites now continue across cron runs instead of timing out.
 
 = 1.1.2 =
-* Data safety: uninstalling the plugin no longer deletes its data unless you explicitly opt in first — a reinstall now picks up exactly where you left off. (New setting.)
+* Data safety: uninstalling the plugin no longer deletes its data unless you explicitly opt in first - a reinstall now picks up exactly where you left off. (New setting.)
 
 = 1.1.1 =
-* New look: the Dragon design system arrives — a consistent Dragon Core header, cleaner tables, and unified status colours. Purely visual; no behaviour changes.
+* New look: the Dragon design system arrives - a consistent Dragon Core header, cleaner tables, and unified status colours. Purely visual; no behaviour changes.
 
 = 1.1.0 =
 * Smarter suggestions: relevance is now scored by document similarity (TF-IDF) instead of keyword overlap alone, so the best target ranks first.
-* Optional AI ranking: add your own OpenAI, Anthropic, or Google API key under Settings and suggestions are re-ranked for editorial relevance — one small request per post, key stored encrypted, no account with us needed.
+* Optional AI ranking: add your own OpenAI, Anthropic, or Google API key under Settings and suggestions are re-ranked for editorial relevance - one small request per post, key stored encrypted, no account with us needed.
 
 = 1.0.2 =
 * Fix: settings could be lost on a deactivate then reactivate update; the migration now carries each value before removing the old copy.
@@ -163,6 +187,9 @@ Yes! Configure which post types to scan in Settings.
 * Dashboard with statistics
 
 == Upgrade Notice ==
+
+= 1.1.13 =
+AI keys stay with their provider, protected posts are never sent to AI, orphan counts update straight after Apply, and code samples and embed URLs are never linked.
 
 = 1.1.12 =
 Uninstall deletes data only when the opt-in is clearly on.

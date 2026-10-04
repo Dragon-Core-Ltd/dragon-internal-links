@@ -237,7 +237,9 @@ class Analyzer {
 	public function generate_suggestions_for_post( int $post_id ): array {
 		$post = get_post( $post_id );
 
-		if ( ! $post || 'publish' !== $post->post_status ) {
+		// A password-protected post is never a source: its text would reach the
+		// AI provider and the stored context.
+		if ( ! $post || 'publish' !== $post->post_status || '' !== (string) $post->post_password ) {
 			return array();
 		}
 
@@ -265,6 +267,7 @@ class Analyzer {
 			'post_type'      => $post_types,
 			'post_status'    => 'publish',
 			'posts_per_page' => 100,
+			'has_password'   => false,
 			'exclude'        => $exclude_ids, // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- Admin-side suggestion generation on a bounded result set.
 			'orderby'        => 'date',
 			'order'          => 'DESC',
@@ -437,6 +440,7 @@ class Analyzer {
 				'orderby'        => 'ID',
 				'order'          => 'ASC',
 				'fields'         => 'ids',
+				'has_password'   => false,
 			);
 
 			$excluded = Scanner::excluded_categories();
@@ -830,42 +834,44 @@ class Analyzer {
 			. substr( $linked, $inner, $close_at - $inner ) . self::PROBE_CLOSE
 			. substr( $linked, $close_at + strlen( '</a>' ) );
 
+		// Offsets and lengths are in characters, so no cut lands inside a
+		// multibyte character (the database refuses invalid UTF-8).
 		$text  = Linker::matchable_text( $marked );
-		$pos   = strpos( $text, self::PROBE_OPEN );
-		$after = strpos( $text, self::PROBE_CLOSE );
+		$pos   = mb_strpos( $text, self::PROBE_OPEN );
+		$after = mb_strpos( $text, self::PROBE_CLOSE );
 		if ( false === $pos || false === $after || $after < $pos ) {
 			return null;
 		}
 
-		$match = substr( $text, $pos + strlen( self::PROBE_OPEN ), $after - $pos - strlen( self::PROBE_OPEN ) );
+		$match = mb_substr( $text, $pos + 1, $after - $pos - 1 );
 		$text  = str_replace( array( self::PROBE_OPEN, self::PROBE_CLOSE ), '', $text );
 
-		// Extract surrounding text (about 150 chars each side)
+		// About 100 characters before the match and 200 after it.
 		$start  = max( 0, $pos - 100 );
-		$length = strlen( $match ) + 200;
+		$length = mb_strlen( $match ) + 200;
 
-		$context = substr( $text, $start, $length );
+		$context = mb_substr( $text, $start, $length );
 
 		// Try to start at word boundary
 		if ( $start > 0 ) {
-			$space_pos = strpos( $context, ' ' );
+			$space_pos = mb_strpos( $context, ' ' );
 			if ( false !== $space_pos && $space_pos < 20 ) {
-				$context = substr( $context, $space_pos + 1 );
+				$context = mb_substr( $context, $space_pos + 1 );
 			}
 			$context = '...' . $context;
 		}
 
 		// Try to end at word boundary
-		$last_space = strrpos( $context, ' ' );
-		if ( false !== $last_space && $last_space > strlen( $context ) - 20 ) {
-			$context = substr( $context, 0, $last_space );
+		$last_space = mb_strrpos( $context, ' ' );
+		if ( false !== $last_space && $last_space > mb_strlen( $context ) - 20 ) {
+			$context = mb_substr( $context, 0, $last_space );
 		}
 
-		if ( strlen( $context ) < strlen( $text ) ) {
+		if ( mb_strlen( $context ) < mb_strlen( $text ) ) {
 			$context .= '...';
 		}
 
-		return trim( $context );
+		return trim( wp_check_invalid_utf8( $context, true ) );
 	}
 
 	/**
@@ -1026,10 +1032,39 @@ class Analyzer {
 	 *
 	 * @return int
 	 */
-	private function count_orphans(): int {
+	public function count_orphans(): int {
 		global $wpdb;
 
 		$scope = $this->report_scope( 's.inbound_count = 0' );
+		if ( null === $scope ) {
+			return 0;
+		}
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Custom plugin table (no core API/cache); the scope clause is built from fixed fragments and generated placeholders.
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM %i s
+				 JOIN {$wpdb->posts} p ON s.post_id = p.ID
+				 {$scope['where']}",
+				...array_merge( array( $wpdb->prefix . 'dil_stats' ), $scope['args'] )
+			)
+		);
+		// phpcs:enable
+
+		return (int) $count;
+	}
+
+	/**
+	 * Number of posts with few outbound links, counted with exactly the filter
+	 * the low-outbound list uses.
+	 *
+	 * @param int $max_outbound Most outbound links a listed post has.
+	 * @return int
+	 */
+	public function count_low_outbound( int $max_outbound = 2 ): int {
+		global $wpdb;
+
+		$scope = $this->report_scope( 's.outbound_count <= %d', array( $max_outbound ) );
 		if ( null === $scope ) {
 			return 0;
 		}

@@ -13,13 +13,13 @@ defined( 'ABSPATH' ) || exit;
  * Re-scores candidate link targets with the site owner's own OpenAI,
  * Anthropic, or Google API key. Fails open: any error, timeout, or
  * unparseable response leaves the TF-IDF ordering untouched. Only numeric
- * scores are ever read from the model output — no model text reaches the
+ * scores are ever read from the model output - no model text reaches the
  * page, so a prompt-injected response has nothing to inject into.
  */
 final class AI_Ranker {
 
 	/**
-	 * Fixed provider endpoints — never derived from user input.
+	 * Fixed provider endpoints - never derived from user input.
 	 */
 	private const ENDPOINTS = array(
 		'openai'    => 'https://api.openai.com/v1/chat/completions',
@@ -63,6 +63,11 @@ final class AI_Ranker {
 	 * Option holding a one-time notice after a retired model was replaced.
 	 */
 	public const MODEL_CHANGED_OPTION = 'dragoninternallinks_ai_model_changed';
+
+	/**
+	 * Option holding the provider the stored API key was entered for.
+	 */
+	public const KEY_PROVIDER_OPTION = 'dragoninternallinks_ai_key_provider';
 
 	/**
 	 * Whether AI ranking is configured and enabled.
@@ -316,13 +321,18 @@ final class AI_Ranker {
 	}
 
 	/**
-	 * Decrypted API key ('' when unset or undecryptable).
+	 * Decrypted API key ('' when unset, undecryptable, or entered for another
+	 * provider). A key stored without a provider belongs to the saved provider.
 	 *
 	 * @return string
 	 */
 	public static function api_key(): string {
 		$stored = (string) get_option( 'dragoninternallinks_ai_api_key', '' );
 		if ( '' === $stored ) {
+			return '';
+		}
+		$owner = (string) get_option( self::KEY_PROVIDER_OPTION, '' );
+		if ( '' !== $owner && self::provider() !== $owner ) {
 			return '';
 		}
 		$decrypted = Crypto::decrypt( $stored );
@@ -396,7 +406,7 @@ final class AI_Ranker {
 				)
 			);
 		} else {
-			// Model name is embedded in the Google URL path — constrain it.
+			// Model name is embedded in the Google URL path - constrain it.
 			if ( ! preg_match( '/^[a-zA-Z0-9.\-]+$/', $model ) ) {
 				return null;
 			}

@@ -222,11 +222,33 @@ class Admin {
 	 */
 	public function render_orphans_page(): void {
 		$orphans      = $this->analyzer->get_orphan_posts( 100 );
-		$low_outbound = $this->analyzer->get_low_outbound_posts( 50 );
+		$orphan_total = max( count( $orphans ), $this->analyzer->count_orphans() );
+		$low_outbound = array_slice( $this->analyzer->get_low_outbound_posts( 25 ), 0, 25 );
+		$low_total    = max( count( $low_outbound ), $this->analyzer->count_low_outbound() );
 		$current_tab  = 'orphans';
 		$last_scan    = (int) get_option( 'dragoninternallinks_last_scan', 0 );
 
 		include DRAGONINTERNALLINKS_PLUGIN_DIR . 'admin/views/orphans.php';
+	}
+
+	/**
+	 * "Showing the first N of M posts." under a list cut short, or ''.
+	 *
+	 * @param int $shown Rows listed.
+	 * @param int $total Rows that match.
+	 * @return string
+	 */
+	public static function showing_note( int $shown, int $total ): string {
+		if ( $total <= $shown ) {
+			return '';
+		}
+
+		return sprintf(
+			/* translators: 1: number of posts listed, 2: number of posts that match. */
+			_n( 'Showing the first %1$s of %2$s post.', 'Showing the first %1$s of %2$s posts.', $total, 'dragon-internal-links' ),
+			number_format_i18n( $shown ),
+			number_format_i18n( $total )
+		);
 	}
 
 	/**
@@ -326,11 +348,8 @@ class Admin {
 	 * Render settings page
 	 */
 	public function render_settings_page(): void {
-		// Handle form submission.
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; nonce is verified in save_settings().
-		if ( isset( $_POST['dragoninternallinks_settings_nonce'] ) ) {
-			$this->save_settings();
-		}
+		// A submitted form is saved first, so the screen shows the new values.
+		$this->save_settings();
 
 		$settings    = $this->get_settings();
 		$current_tab = 'settings';
@@ -352,7 +371,8 @@ class Admin {
 	}
 
 	/**
-	 * Save settings
+	 * Save the settings form, when the request carries its nonce and the user
+	 * may manage options. Any other request is left alone.
 	 */
 	private function save_settings(): void {
 		if ( ! isset( $_POST['dragoninternallinks_settings_nonce'] ) || ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['dragoninternallinks_settings_nonce'] ) ), 'dragoninternallinks_save_settings' ) ) {
@@ -364,8 +384,9 @@ class Admin {
 		}
 
 		if ( isset( $_POST['dragoninternallinks_post_types'] ) ) {
-			$post_types = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['dragoninternallinks_post_types'] ) );
-			update_option( 'dragoninternallinks_post_types', $post_types );
+			// Post type names are keys; anything that is not a string is dropped.
+			$post_types = (array) map_deep( wp_unslash( $_POST['dragoninternallinks_post_types'] ), 'sanitize_key' );
+			update_option( 'dragoninternallinks_post_types', array_values( array_filter( $post_types, 'is_string' ) ) );
 		} else {
 			update_option( 'dragoninternallinks_post_types', array() );
 		}
@@ -377,8 +398,9 @@ class Admin {
 		}
 
 		if ( isset( $_POST['dragoninternallinks_exclude_categories'] ) ) {
-			$cats = array_map( 'absint', (array) $_POST['dragoninternallinks_exclude_categories'] );
-			update_option( 'dragoninternallinks_exclude_categories', $cats );
+			// Term IDs; anything that is not a whole number is dropped.
+			$cats = (array) map_deep( wp_unslash( $_POST['dragoninternallinks_exclude_categories'] ), 'absint' );
+			update_option( 'dragoninternallinks_exclude_categories', array_values( array_filter( $cats, 'is_int' ) ) );
 		} else {
 			update_option( 'dragoninternallinks_exclude_categories', array() );
 		}
@@ -403,7 +425,8 @@ class Admin {
 
 		// AI re-ranking (bring-your-own key). A recorded failure belongs to the
 		// provider, model and key it happened with, so changing any clears it.
-		$ai_before = array( AI_Ranker::provider(), AI_Ranker::model(), (string) get_option( 'dragoninternallinks_ai_api_key', '' ) );
+		$ai_before       = array( AI_Ranker::provider(), AI_Ranker::model(), (string) get_option( 'dragoninternallinks_ai_api_key', '' ) );
+		$provider_before = AI_Ranker::provider();
 
 		update_option( 'dragoninternallinks_ai_enabled', isset( $_POST['dragoninternallinks_ai_enabled'] ) );
 
@@ -420,13 +443,33 @@ class Admin {
 		}
 
 		if ( isset( $_POST['dragoninternallinks_ai_api_key'] ) ) {
-			$submitted = trim( sanitize_text_field( wp_unslash( $_POST['dragoninternallinks_ai_api_key'] ) ) );
+			// Kept exactly as typed apart from control characters and the
+			// spaces around it; a field that is not text changes nothing.
+			$submitted = filter_var( wp_unslash( $_POST['dragoninternallinks_ai_api_key'] ), FILTER_UNSAFE_RAW, FILTER_FLAG_STRIP_LOW );
+			$submitted = is_string( $submitted ) ? trim( $submitted ) : null;
 			if ( '' === $submitted ) {
 				delete_option( 'dragoninternallinks_ai_api_key' );
-			} elseif ( '••••••••' !== $submitted ) {
+				delete_option( AI_Ranker::KEY_PROVIDER_OPTION );
+			} elseif ( null !== $submitted && '••••••••' !== $submitted ) {
 				// The masked placeholder means "keep the stored key".
 				update_option( 'dragoninternallinks_ai_api_key', AI_Ranker::encrypt_key( $submitted ) );
+				update_option( AI_Ranker::KEY_PROVIDER_OPTION, AI_Ranker::provider() );
 			}
+		}
+
+		// A kept key belongs to the provider it was entered for, so a provider
+		// change without a new key removes it rather than sending it on.
+		$key_owner = (string) get_option( AI_Ranker::KEY_PROVIDER_OPTION, '' );
+		$key_owner = '' !== $key_owner ? $key_owner : $provider_before;
+		if ( '' !== (string) get_option( 'dragoninternallinks_ai_api_key', '' ) && AI_Ranker::provider() !== $key_owner ) {
+			delete_option( 'dragoninternallinks_ai_api_key' );
+			delete_option( AI_Ranker::KEY_PROVIDER_OPTION );
+			add_settings_error(
+				'dragoninternallinks_settings',
+				'ai_key_removed',
+				__( 'The saved API key was removed because it belongs to the previous AI provider. Enter an API key for the new provider to use AI ranking.', 'dragon-internal-links' ),
+				'warning'
+			);
 		}
 
 		if ( array( AI_Ranker::provider(), AI_Ranker::model(), (string) get_option( 'dragoninternallinks_ai_api_key', '' ) ) !== $ai_before ) {
@@ -467,7 +510,7 @@ class Admin {
 		);
 
 		if ( ! $stats ) {
-			echo '<span class="dil-no-data">—</span>';
+			echo '<span class="dil-no-data">-</span>';
 			return;
 		}
 

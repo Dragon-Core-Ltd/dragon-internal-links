@@ -135,7 +135,8 @@ class Scanner {
 		 * first, so anything that went wrong afterwards left the post with no
 		 * index at all while the scan still reported the links it had found.
 		 */
-		$links = $this->extract_links( $post->post_content, (string) get_permalink( $post ), $this->indexed_targets( $post_id ) );
+		$indexed = $this->indexed_targets( $post_id );
+		$links   = $this->extract_links( $post->post_content, (string) get_permalink( $post ), $indexed );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Transaction control around this plugin's own writes.
 		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
@@ -162,8 +163,16 @@ class Scanner {
 			return $links;
 		}
 
-		// Update stats
+		// Update stats: this post, and every post it linked to before or links to
+		// now, whose inbound count may have changed.
 		$this->update_post_stats( $post_id );
+
+		$targets = array_merge( array_values( $indexed ), array_column( $links, 'target_id' ) );
+		foreach ( array_unique( array_map( 'intval', $targets ) ) as $target_id ) {
+			if ( $target_id > 0 && $target_id !== $post_id ) {
+				$this->update_post_stats( $target_id );
+			}
+		}
 
 		return $links;
 	}
@@ -883,11 +892,13 @@ class Scanner {
 			)
 		);
 
-		// Get inbound count for this post
+		// Get inbound count for this post; a link from the post to itself is
+		// not an inbound link.
 		$inbound = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				'SELECT COUNT(*) FROM %i WHERE target_post_id = %d',
+				'SELECT COUNT(*) FROM %i WHERE target_post_id = %d AND source_post_id <> %d',
 				$table_links,
+				$post_id,
 				$post_id
 			)
 		);

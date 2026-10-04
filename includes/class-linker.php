@@ -20,7 +20,8 @@ defined( 'ABSPATH' ) || exit;
  * HTML chunk is then tokenised into text, tags, comments, declarations and
  * raw-text element contents, and only text is searched: text inside an open
  * <a> is skipped, and the contents of <script>, <style>, <textarea> and
- * <title> are skipped whole, as are captions and headings. The matched text is used as the anchor text so
+ * <title> are skipped whole, as are captions, headings, code samples and
+ * bare URLs or email addresses. The matched text is used as the anchor text so
  * the post's own casing is preserved.
  *
  * Traversal state (an open <a>, an open raw-text element) is carried across
@@ -57,10 +58,29 @@ class Linker {
 	private const CAPTION_SHORTCODES = array( 'caption', 'wp_caption' );
 
 	/**
-	 * Elements whose text is never linked, like a caption: <figcaption> and
-	 * headings.
+	 * Elements whose text is never linked, like a caption: <figcaption>,
+	 * headings and code samples. A <pre> is a code sample only as the Code
+	 * block (see CODE_BLOCK_CLASS); Verse and Preformatted blocks are prose.
 	 */
-	private const UNLINKED_ELEMENTS = array( 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' );
+	private const UNLINKED_ELEMENTS = array( 'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'kbd', 'samp', 'var' );
+
+	/**
+	 * Code sample elements, left out of matchable_text() like headings.
+	 */
+	private const CODE_ELEMENTS = array( 'code', 'kbd', 'samp', 'var' );
+
+	/**
+	 * Class of the Code block's <pre>. A classic <pre><code> is covered by
+	 * <code> itself.
+	 */
+	private const CODE_BLOCK_CLASS = 'wp-block-code';
+
+	/**
+	 * A bare URL or email address in text. A link inside one would break it,
+	 * and an embed's URL must stay on its own line for core to embed it. A
+	 * no-break space (raw or as an entity) ends it like any other space.
+	 */
+	private const URL_TOKEN = '~(?:https?|ftp)://(?:(?!&nbsp;|&#0*160;|&#x0*a0;|\x{00A0})\S)+|(?:(?!&nbsp;|&#0*160;|&#x0*a0;|\x{00A0})[^\s@])+@(?:(?!&nbsp;|&#0*160;|&#x0*a0;|\x{00A0})\S)+~iu';
 
 	/**
 	 * A tag's attribute section, with quoted values (which may hold ">") kept
@@ -259,8 +279,9 @@ class Linker {
 	 * an inline tag or a line break reads as one here), so only insert() decides
 	 * whether a keyword can be applied.
 	 *
-	 * Captions (<figcaption> and the caption shortcode), headings, shortcode tags,
-	 * scripts, styles and comments are left out, inline tags join the text on
+	 * Captions (<figcaption> and the caption shortcode), headings, code samples,
+	 * shortcode tags, scripts, styles, comments, and bare URLs and email
+	 * addresses are left out, inline tags join the text on
 	 * either side (so "cat<strong>egory</strong>" reads "category"), and every
 	 * other tag separates it.
 	 *
@@ -273,6 +294,8 @@ class Linker {
 			'@<!--.*?-->@s'                        => ' ',
 			'@<figcaption\b.*?</figcaption>@si'    => ' ',
 			'@<h([1-6])\b.*?</h\1\s*>@si'          => ' ',
+			'@<pre\b[^>]*\bclass\s*=\s*["\']?[^"\'>]*\b' . self::CODE_BLOCK_CLASS . '\b.*?</pre\s*>@si' => ' ',
+			'@<(' . implode( '|', self::CODE_ELEMENTS ) . ')\b.*?</\1\s*>@si' => ' ',
 			'/\[(' . implode( '|', self::CAPTION_SHORTCODES ) . ')(?![\w-])[^\]]*\].*?\[\/\1\]/si' => ' ',
 		);
 
@@ -294,7 +317,8 @@ class Linker {
 		}
 
 		$text = wp_strip_all_tags( $text );
-		$text = preg_replace( '/[ \t\r\n]+/', ' ', $text );
+		$text = preg_replace( self::URL_TOKEN, ' ', $text );
+		$text = is_string( $text ) ? preg_replace( '/[ \t\r\n]+/', ' ', $text ) : null;
 
 		return is_string( $text ) ? trim( $text ) : '';
 	}
@@ -394,19 +418,21 @@ class Linker {
 	 * Fresh traversal state.
 	 *
 	 * "anchor" is the depth of open <a> elements (text is only linkable at
-	 * depth 0), "raw" is the name of the open raw-text element, if any,
+	 * depth 0), "raw" is the name of the open raw-text element, if any, "pre"
+	 * holds one flag per open <pre> saying whether it is a Code block,
 	 * "broken" is set once a chunk has ended inside a tag, after which nothing
 	 * is linkable, "caption" is the depth of open captions (<figcaption> or the
 	 * caption shortcode) and headings, whose text is never linked, and "glue" is whether the
 	 * text so far ends in a word character with only inline tags since, so the
 	 * next text run continues that word.
 	 *
-	 * @return array{anchor:int,raw:string,broken:bool,caption:int,glue:bool}
+	 * @return array{anchor:int,raw:string,pre:array<int,bool>,broken:bool,caption:int,glue:bool}
 	 */
 	private function new_state(): array {
 		return array(
 			'anchor'  => 0,
 			'raw'     => '',
+			'pre'     => array(),
 			'broken'  => false,
 			'caption' => 0,
 			'glue'    => false,
@@ -597,7 +623,8 @@ class Linker {
 			return null;
 		}
 
-		if ( false === preg_match_all( $pattern, $text, $matches, PREG_OFFSET_CAPTURE ) ) {
+		if ( false === preg_match_all( $pattern, $text, $matches, PREG_OFFSET_CAPTURE )
+			|| false === preg_match_all( self::URL_TOKEN, $text, $urls, PREG_OFFSET_CAPTURE ) ) {
 			$this->regex_failed = true;
 			return null;
 		}
@@ -606,7 +633,7 @@ class Linker {
 			$from = (int) $match[1];
 			$to   = $from + strlen( $match[0] );
 
-			if ( ! self::within_spans( $from, $to, $linkable ) ) {
+			if ( ! self::within_spans( $from, $to, $linkable ) || self::overlaps_token( $from, $to, $urls[0] ) ) {
 				continue;
 			}
 
@@ -688,6 +715,24 @@ class Linker {
 	private static function within_spans( int $from, int $to, array $spans ): bool {
 		foreach ( $spans as $span ) {
 			if ( $from >= $span[0] && $to <= $span[1] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether [from, to) overlaps any of the matched tokens.
+	 *
+	 * @param int                               $from   Start offset.
+	 * @param int                               $to     End offset, exclusive.
+	 * @param array<int,array{0:string,1:int}> $tokens Matches with offsets, from preg_match_all().
+	 * @return bool
+	 */
+	private static function overlaps_token( int $from, int $to, array $tokens ): bool {
+		foreach ( $tokens as $token ) {
+			$start = (int) $token[1];
+			if ( $from < $start + strlen( (string) $token[0] ) && $to > $start ) {
 				return true;
 			}
 		}
@@ -782,6 +827,7 @@ class Linker {
 			'end'     => $end,
 			'tag'     => strtolower( substr( $html, $name_at, $name_length ) ),
 			'closing' => $closing,
+			'attrs'   => substr( $html, $name_at + $name_length, $end - $name_at - $name_length ),
 		);
 	}
 
@@ -976,6 +1022,21 @@ class Linker {
 			$state['glue'] = false;
 		}
 
+		if ( 'pre' === $tag ) {
+			// Each <pre> remembers whether it opened a Code block, so its close
+			// ends only what it started.
+			if ( $token['closing'] ) {
+				if ( array_pop( $state['pre'] ) && $state['caption'] > 0 ) {
+					--$state['caption'];
+				}
+				return;
+			}
+			$code              = self::is_code_block_pre( (string) ( $token['attrs'] ?? '' ) );
+			$state['pre'][]    = $code;
+			$state['caption'] += $code ? 1 : 0;
+			return;
+		}
+
 		if ( $token['closing'] ) {
 			// Clamped at zero so a stray "</a>" cannot make later text inside a
 			// real anchor look linkable.
@@ -1003,6 +1064,22 @@ class Linker {
 		if ( in_array( $tag, self::RAW_TEXT_TAGS, true ) ) {
 			$state['raw'] = $tag;
 		}
+	}
+
+	/**
+	 * Whether a <pre> tag's attributes give it the Code block's class.
+	 *
+	 * @param string $attrs Attribute text of the tag.
+	 * @return bool
+	 */
+	private static function is_code_block_pre( string $attrs ): bool {
+		if ( 1 !== preg_match( '/\bclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $attrs, $m ) ) {
+			return false;
+		}
+
+		$classes = preg_split( '/\s+/', strtolower( implode( ' ', array_slice( $m, 1 ) ) ), -1, PREG_SPLIT_NO_EMPTY );
+
+		return is_array( $classes ) && in_array( self::CODE_BLOCK_CLASS, $classes, true );
 	}
 
 	/**

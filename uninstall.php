@@ -37,17 +37,20 @@ $dragoninternallinks_uninstall_site = static function (): void {
 	$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'dil_suggestions' ) );
 	// phpcs:enable
 
-	// Delete all plugin options (current namespace-derived prefix and the pre-1.0.1
-	// dil_ prefix, in case an install was removed before the migration ran).
-	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dragoninternallinks\_%' OR option_name LIKE 'dil\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	// Delete all plugin options, and by name the ones the pre-1.0.1 dil_ prefix
+	// used, in case an install was removed before the migration ran.
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dragoninternallinks\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	foreach ( array( 'db_version', 'auto_scan', 'exclude_categories', 'last_scan', 'last_scan_count', 'min_word_count', 'post_types', 'scan_frequency' ) as $legacy_option ) {
+		delete_option( 'dil_' . $legacy_option );
+	}
 
 	// Clear the daily-scan cron (current and pre-1.0.1 hook names).
 	wp_clear_scheduled_hook( 'dragoninternallinks_daily_scan' );
 	wp_clear_scheduled_hook( 'dil_daily_scan' );
 
-	// Delete any transients (both prefixes).
-	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%\_transient\_dragoninternallinks\_%' OR option_name LIKE '%\_transient\_dil\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%\_transient\_timeout\_dragoninternallinks\_%' OR option_name LIKE '%\_transient\_timeout\_dil\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	// Delete any transients.
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%\_transient\_dragoninternallinks\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%\_transient\_timeout\_dragoninternallinks\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 };
 
 if ( is_multisite() ) {

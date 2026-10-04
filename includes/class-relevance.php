@@ -10,7 +10,7 @@ namespace DragonInternalLinks;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Pure lexical relevance scoring — no WordPress dependencies, unit-testable.
+ * Pure lexical relevance scoring - no WordPress dependencies, unit-testable.
  * Replaces guesswork bonuses with document similarity: a target is relevant
  * to a source when the words that are RARE across the candidate pool are
  * shared between the two, not merely when its title happens to appear once.
@@ -118,11 +118,11 @@ final class Relevance {
 	/**
 	 * Lowercased content words (length > 2, stop words removed).
 	 *
-	 * @param string $text Raw text (may contain markup — caller strips).
+	 * @param string $text Raw text (may contain markup - caller strips).
 	 * @return string[] Tokens.
 	 */
 	public static function tokenize( string $text ): array {
-		$text  = strtolower( $text );
+		$text  = mb_strtolower( $text );
 		$text  = (string) preg_replace( '/[^\p{L}\p{N}\s]/u', ' ', $text );
 		$words = preg_split( '/\s+/', trim( $text ) );
 		if ( false === $words ) {
@@ -130,7 +130,7 @@ final class Relevance {
 		}
 		$tokens = array();
 		foreach ( $words as $word ) {
-			if ( strlen( $word ) > 2 && ! in_array( $word, self::STOP_WORDS, true ) ) {
+			if ( mb_strlen( $word ) > 2 && ! in_array( $word, self::STOP_WORDS, true ) ) {
 				$tokens[] = $word;
 			}
 		}

@@ -55,7 +55,8 @@ final class AjaxTest extends TestCase {
 
 	protected function setUp(): void {
 		dragoninternallinks_test_reset();
-		$_POST = array( 'suggestion_id' => '9' );
+		$_POST    = array( 'suggestion_id' => '9' );
+		$_REQUEST = array( 'nonce' => 'valid' );
 
 		$this->scanner = new AjaxTestScanner();
 		$this->ajax    = new Ajax( $this->scanner, new Analyzer( $this->scanner ) );
@@ -65,6 +66,7 @@ final class AjaxTest extends TestCase {
 			'source_post_id' => 5,
 			'target_post_id' => 7,
 			'keyword'        => 'coffee beans guide',
+			'status'         => 'pending',
 		);
 		$GLOBALS['wpdb']->returns['update']  = 1;
 
@@ -80,7 +82,8 @@ final class AjaxTest extends TestCase {
 	}
 
 	protected function tearDown(): void {
-		$_POST = array();
+		$_POST    = array();
+		$_REQUEST = array();
 	}
 
 	private function apply(): \DragonInternalLinks_Test_Json_Response {

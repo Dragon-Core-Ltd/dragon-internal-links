@@ -150,7 +150,10 @@ defined( 'ABSPATH' ) || exit;
 		<div class="dil-settings-section">
 			<h2><?php esc_html_e( 'AI Suggestion Ranking', 'dragon-internal-links' ); ?></h2>
 			<p class="description">
-				<?php esc_html_e( 'Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. One small request per post when generating suggestions; your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring.', 'dragon-internal-links' ); ?>
+				<?php esc_html_e( 'Optional: re-rank suggestions with your own AI API key for editorial relevance, not just word overlap. Your key is stored encrypted and content goes only to the provider you choose. Without a key, suggestions use built-in document-similarity scoring.', 'dragon-internal-links' ); ?>
+			</p>
+			<p class="description">
+				<?php esc_html_e( 'One request is sent per post each time suggestions are generated, including every scheduled full scan (daily or weekly), so the requests repeat on every run. Each request holds the post\'s title and up to about 1,500 characters of its text (a shorter post is sent whole), plus the title, a short extract and the proposed anchor of each candidate page. Password-protected posts are never sent. Your provider may charge for each request.', 'dragon-internal-links' ); ?>
 			</p>
 
 			<?php $dragoninternallinks_ai_status = \DragonInternalLinks\Admin::ai_status_message(); ?>

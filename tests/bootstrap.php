@@ -63,6 +63,8 @@ function dragoninternallinks_test_reset(): void {
 		'network_active'  => false,
 		'is_admin'        => false,
 		'doing_cron'      => false,
+		'tables'          => array(),
+		'create_fails'    => false,
 	);
 	$GLOBALS['wpdb']           = new DragonInternalLinks_Test_Wpdb();
 	$GLOBALS['shortcode_tags'] = array();
@@ -139,7 +141,27 @@ class DragonInternalLinks_Test_Wpdb {
 		return ( 0 === $blog_id || 1 === $blog_id ) ? $this->base_prefix : $this->base_prefix . $blog_id . '_';
 	}
 
+	/**
+	 * Core: escapes the LIKE wildcards and the backslash.
+	 */
+	public function esc_like( $text ) {
+		return addcslashes( (string) $text, '_%\\' );
+	}
+
 	public function __call( string $name, array $args ) {
+		// SHOW TABLES LIKE is answered from the tables dbDelta() created, unless
+		// the test set its own get_var result.
+		if ( 'prepare' === $name && str_starts_with( (string) ( $args[0] ?? '' ), 'SHOW TABLES LIKE %s' ) ) {
+			$this->calls[] = array( $name, $args );
+			return "SHOW TABLES LIKE '" . (string) ( $args[1] ?? '' ) . "'";
+		}
+		if ( 'get_var' === $name && ! array_key_exists( 'get_var', $this->returns )
+			&& 1 === preg_match( "/^SHOW TABLES LIKE '(.*)'$/s", (string) ( $args[0] ?? '' ), $m ) ) {
+			$this->calls[] = array( $name, $args );
+			$table         = stripcslashes( $m[1] );
+			return in_array( $table, (array) ( $GLOBALS['dragoninternallinks_test']['tables'] ?? array() ), true ) ? $table : null;
+		}
+
 		$this->calls[] = array( $name, $args );
 		if ( array_key_exists( $name, $this->returns ) ) {
 			$value = $this->returns[ $name ];
@@ -191,6 +213,7 @@ final class WP_Post {
 	public $post_date    = '';
 	public $post_parent  = 0;
 	public $post_name    = '';
+	public $post_password = '';
 }
 
 class WP_Error {
@@ -370,14 +393,83 @@ function absint( $maybeint ) {
 	return abs( (int) $maybeint );
 }
 
-function check_ajax_referer( ...$args ) {
-	unset( $args );
-	return 1;
+/**
+ * Mirrors core: the nonce is read from the named request field (falling back
+ * to _ajax_nonce, then _wpnonce) and a failed check ends an AJAX request with
+ * "-1" and a 403.
+ */
+function check_ajax_referer( $action = -1, $query_arg = false, $stop = true ) {
+	$nonce = '';
+	if ( $query_arg && isset( $_REQUEST[ $query_arg ] ) ) {
+		$nonce = $_REQUEST[ $query_arg ];
+	} elseif ( isset( $_REQUEST['_ajax_nonce'] ) ) {
+		$nonce = $_REQUEST['_ajax_nonce'];
+	} elseif ( isset( $_REQUEST['_wpnonce'] ) ) {
+		$nonce = $_REQUEST['_wpnonce'];
+	}
+
+	$result = is_string( $nonce ) ? wp_verify_nonce( $nonce, $action ) : false;
+
+	if ( $stop && false === $result ) {
+		wp_die( -1, 403 );
+	}
+
+	return $result;
 }
 
-function current_user_can( ...$args ) {
-	unset( $args );
-	return $GLOBALS['dragoninternallinks_test']['can'];
+/**
+ * Thrown by the wp_die() stub in place of ending the request.
+ */
+class DragonInternalLinks_Test_Die extends \RuntimeException {
+	public int $status;
+
+	public function __construct( string $message, int $status ) {
+		parent::__construct( $message );
+		$this->status = $status;
+	}
+}
+
+/**
+ * Core prints the message and ends the request; the response code is the
+ * 'response' argument, or the third parameter itself when it is an integer
+ * (the second, when the title is an integer).
+ */
+function wp_die( $message = '', $title = '', $args = array() ) {
+	if ( is_int( $args ) ) {
+		$args = array( 'response' => $args );
+	} elseif ( is_int( $title ) ) {
+		$args = array( 'response' => $title );
+	}
+	$status = is_array( $args ) && isset( $args['response'] ) ? (int) $args['response'] : 500;
+	throw new DragonInternalLinks_Test_Die( (string) $message, $status );
+}
+
+/**
+ * Core: applies the callback to every non-array, non-object leaf, keeping keys.
+ */
+function map_deep( $value, $callback ) {
+	if ( is_array( $value ) ) {
+		foreach ( $value as $index => $item ) {
+			$value[ $index ] = map_deep( $item, $callback );
+		}
+	} elseif ( is_object( $value ) ) {
+		foreach ( get_object_vars( $value ) as $property_name => $property_value ) {
+			$value->$property_name = map_deep( $property_value, $callback );
+		}
+	} else {
+		$value = call_user_func( $callback, $value );
+	}
+
+	return $value;
+}
+
+/**
+ * The 'can' test state is either one answer for every capability or a closure
+ * given the capability and its arguments.
+ */
+function current_user_can( $capability, ...$args ) {
+	$can = $GLOBALS['dragoninternallinks_test']['can'];
+	return $can instanceof \Closure ? (bool) $can( $capability, ...$args ) : (bool) $can;
 }
 
 function get_post( $post = null ) {
@@ -515,9 +607,17 @@ function wp_get_post_categories( $post_id = 0, $args = array() ) {
 	return array_map( 'intval', $GLOBALS['dragoninternallinks_test']['terms'][ (int) $post_id ]['category'] ?? array() );
 }
 
+/**
+ * Returns the posts the test configured. Like core, 'has_password' => false
+ * leaves out posts that have a password.
+ */
 function get_posts( $args = null ) {
 	dragoninternallinks_test_record( 'get_posts', array( $args ) );
-	return $GLOBALS['dragoninternallinks_test']['get_posts'];
+	$posts = $GLOBALS['dragoninternallinks_test']['get_posts'];
+	if ( is_array( $args ) && array_key_exists( 'has_password', $args ) && false === $args['has_password'] ) {
+		$posts = array_values( array_filter( $posts, static fn( $post ) => '' === (string) $post->post_password ) );
+	}
+	return $posts;
 }
 
 function wp_strip_all_tags( $text, $remove_breaks = false ) {
@@ -608,11 +708,15 @@ function wp_unschedule_event( $timestamp, $hook, $args = array(), $wp_error = fa
 }
 
 function wp_verify_nonce( $nonce, $action = -1 ) {
-	unset( $action );
+	dragoninternallinks_test_record( 'wp_verify_nonce', array( $nonce, $action ) );
 	return 'valid' === $nonce ? 1 : false;
 }
 
 function sanitize_key( $key ) {
+	// Core returns '' for anything that is not a scalar.
+	if ( ! is_scalar( $key ) ) {
+		return '';
+	}
 	return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
 }
 
@@ -625,6 +729,10 @@ function wp_unslash( $value ) {
 
 function sanitize_text_field( $str ) {
 	// Mirrors core's _sanitize_text_fields( $str, false ).
+	if ( is_object( $str ) || is_array( $str ) ) {
+		return '';
+	}
+
 	$filtered = (string) $str;
 
 	if ( '' !== $filtered && 1 !== preg_match( '//u', $filtered ) ) {
@@ -711,9 +819,17 @@ function flush_rewrite_rules( $hard = true ) {
 	dragoninternallinks_test_record( 'flush_rewrite_rules', array( $hard ) );
 }
 
+/**
+ * Records the call and, unless the test made table creation fail, the table
+ * its CREATE TABLE statement names, so SHOW TABLES finds it afterwards.
+ */
 function dbDelta( $queries = '', $execute = true ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.FunctionNameInvalid
 	unset( $execute );
 	dragoninternallinks_test_record( 'dbDelta', array( $GLOBALS['wpdb']->prefix, $queries ) );
+	if ( empty( $GLOBALS['dragoninternallinks_test']['create_fails'] ) && 1 === preg_match( '/CREATE TABLE\s+(\S+)/', (string) $queries, $m ) ) {
+		$GLOBALS['dragoninternallinks_test']['tables'][] = $m[1];
+		return array( $m[1] => 'Created table ' . $m[1] );
+	}
 	return array();
 }
 
@@ -773,6 +889,98 @@ function restore_current_blog() {
 function is_plugin_active_for_network( $plugin ) {
 	unset( $plugin );
 	return is_multisite() && (bool) $GLOBALS['dragoninternallinks_test']['network_active'];
+}
+
+// Settings screen: the template helpers the view prints with.
+function esc_html_e( $text, $domain = 'default' ) {
+	unset( $domain );
+	echo esc_html( $text );
+}
+
+function admin_url( $path = '', $scheme = 'admin' ) {
+	unset( $scheme );
+	return 'https://example.test/wp-admin/' . ltrim( (string) $path, '/' );
+}
+
+/**
+ * Prints the notices recorded by add_settings_error() for one setting.
+ */
+function settings_errors( $setting = '', $sanitize = false, $hide_on_update = false ) {
+	unset( $sanitize, $hide_on_update );
+	foreach ( $GLOBALS['dragoninternallinks_test']['settings_errors'] as $error ) {
+		if ( '' !== $setting && $error[0] !== $setting ) {
+			continue;
+		}
+		printf(
+			"<div id='setting-error-%s' class='notice notice-%s settings-error is-dismissible'><p><strong>%s</strong></p></div>\n",
+			esc_attr( $error[1] ),
+			esc_attr( $error[3] ),
+			$error[2]
+		);
+	}
+}
+
+function wp_nonce_field( $action = -1, $name = '_wpnonce', $referer = true, $display = true ) {
+	unset( $action, $referer );
+	$field = '<input type="hidden" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="valid" />';
+	if ( $display ) {
+		echo $field;
+	}
+	return $field;
+}
+
+/**
+ * Public post types as objects, as get_post_types( ..., 'objects' ) returns them.
+ */
+function get_post_types( $args = array(), $output = 'names', $operator = 'and' ) {
+	unset( $args, $operator );
+	$types = array();
+	foreach ( array( 'post' => 'Posts', 'page' => 'Pages', 'attachment' => 'Media' ) as $name => $label ) {
+		$types[ $name ] = 'objects' === $output ? (object) array(
+			'name'  => $name,
+			'label' => $label,
+		) : $name;
+	}
+	return $types;
+}
+
+/**
+ * Core returns null for a post type that is not registered; the tests register none.
+ */
+function get_post_type_object( $post_type ) {
+	unset( $post_type );
+	return null;
+}
+
+function date_i18n( $format, $timestamp_with_offset = false, $gmt = false ) {
+	unset( $gmt );
+	return gmdate( (string) $format, false === $timestamp_with_offset ? time() : (int) $timestamp_with_offset );
+}
+
+function get_categories( $args = '' ) {
+	unset( $args );
+	return array();
+}
+
+function checked( $checked, $current = true, $display = true ) {
+	$result = (string) $checked === (string) $current ? " checked='checked'" : '';
+	if ( $display ) {
+		echo $result;
+	}
+	return $result;
+}
+
+function selected( $selected, $current = true, $display = true ) {
+	$result = (string) $selected === (string) $current ? " selected='selected'" : '';
+	if ( $display ) {
+		echo $result;
+	}
+	return $result;
+}
+
+function submit_button( $text = '', $type = 'primary', $name = 'submit', $wrap = true, $other_attributes = '' ) {
+	unset( $type, $wrap, $other_attributes );
+	echo '<p class="submit"><input type="submit" name="' . esc_attr( $name ) . '" id="' . esc_attr( $name ) . '" class="button button-primary" value="' . esc_attr( $text ) . '" /></p>';
 }
 
 dragoninternallinks_test_reset();

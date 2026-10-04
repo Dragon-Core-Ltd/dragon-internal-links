@@ -282,6 +282,12 @@ class Ajax {
 			wp_send_json_error( array( 'message' => __( 'Suggestion not found.', 'dragon-internal-links' ) ) );
 		}
 
+		// From a stale page or a second admin: the first occurrence may already
+		// be the link, and applying again would add a second one.
+		if ( 'pending' !== (string) ( $suggestion['status'] ?? '' ) ) {
+			wp_send_json_error( array( 'message' => __( 'This suggestion has already been applied or dismissed, so no change was made. Refresh the page.', 'dragon-internal-links' ) ) );
+		}
+
 		$post       = get_post( $suggestion['source_post_id'] );
 		$target_url = get_permalink( $suggestion['target_post_id'] );
 
@@ -298,7 +304,7 @@ class Ajax {
 		}
 
 		// Applying a suggestion edits the source post's content, so require edit
-		// rights on that specific post — manage_options alone must not let a role
+		// rights on that specific post - manage_options alone must not let a role
 		// without edit access mutate arbitrary posts.
 		if ( ! current_user_can( 'edit_post', (int) $post->ID ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'dragon-internal-links' ) ) );

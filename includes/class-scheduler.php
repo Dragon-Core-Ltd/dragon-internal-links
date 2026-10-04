@@ -103,7 +103,7 @@ class Scheduler {
 		$start    = microtime( true );
 		$deadline = time() + 2 * MINUTE_IN_SECONDS;
 
-		// Phase 1 — scan, in batches inside a time box. A large site cannot finish
+		// Phase 1 - scan, in batches inside a time box. A large site cannot finish
 		// inside one cron request without hitting the PHP time limit; an unfinished
 		// scan reschedules itself a minute out and continues from its offset. Once
 		// generation has started (generate_offset set), this phase is skipped so a
@@ -127,7 +127,7 @@ class Scheduler {
 			update_option( 'dragoninternallinks_generate_offset', 0, false );
 		}
 
-		// Phase 2 — generate suggestions for EVERY post, resumable + time-boxed so
+		// Phase 2 - generate suggestions for EVERY post, resumable + time-boxed so
 		// a large site (especially with AI re-ranking) never overruns one run.
 		// Pending suggestions are cleared once, when generation starts at offset 0.
 		$gen_offset = (int) get_option( 'dragoninternallinks_generate_offset', 0 );

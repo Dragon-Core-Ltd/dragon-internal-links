@@ -39,8 +39,12 @@ defined( 'ABSPATH' ) || exit;
 	<div class="dil-card">
 		<h2>
 			<?php esc_html_e( 'Posts with Zero Inbound Links', 'dragon-internal-links' ); ?>
-			<span class="dil-count">(<?php echo esc_html( number_format_i18n( count( $orphans ) ) ); ?>)</span>
+			<span class="dil-count">(<?php echo esc_html( number_format_i18n( $orphan_total ) ); ?>)</span>
 		</h2>
+		<?php $dragoninternallinks_note = \DragonInternalLinks\Admin::showing_note( count( $orphans ), $orphan_total ); ?>
+		<?php if ( '' !== $dragoninternallinks_note ) : ?>
+			<p class="dil-muted"><?php echo esc_html( $dragoninternallinks_note ); ?></p>
+		<?php endif; ?>
 
 		<?php if ( empty( $orphans ) && empty( $last_scan ) ) : ?>
 			<div class="dragon-card dragon-firstrun" style="max-width:640px;">
@@ -108,8 +112,12 @@ defined( 'ABSPATH' ) || exit;
 	<div class="dil-card" style="margin-top: 20px;">
 		<h2>
 			<?php esc_html_e( 'Posts with Few Outbound Links', 'dragon-internal-links' ); ?>
-			<span class="dil-count">(<?php echo esc_html( number_format_i18n( count( $low_outbound ) ) ); ?>)</span>
+			<span class="dil-count">(<?php echo esc_html( number_format_i18n( $low_total ) ); ?>)</span>
 		</h2>
+		<?php $dragoninternallinks_note = \DragonInternalLinks\Admin::showing_note( count( $low_outbound ), $low_total ); ?>
+		<?php if ( '' !== $dragoninternallinks_note ) : ?>
+			<p class="dil-muted"><?php echo esc_html( $dragoninternallinks_note ); ?></p>
+		<?php endif; ?>
 
 		<p class="dil-description">
 			<?php esc_html_e( 'These posts have 2 or fewer outbound internal links. Consider adding more to improve site structure.', 'dragon-internal-links' ); ?>
@@ -133,7 +141,7 @@ defined( 'ABSPATH' ) || exit;
 					</tr>
 				</thead>
 				<tbody>
-					<?php foreach ( array_slice( $low_outbound, 0, 25 ) as $dragoninternallinks_post ) : ?>
+					<?php foreach ( $low_outbound as $dragoninternallinks_post ) : ?>
 						<tr>
 							<td>
 								<a href="<?php echo esc_url( get_edit_post_link( $dragoninternallinks_post['post_id'] ) ); ?>">

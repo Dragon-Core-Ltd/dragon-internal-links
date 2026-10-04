@@ -80,7 +80,7 @@ class Plugin {
 
 		$options = array( 'auto_scan', 'exclude_categories', 'last_scan', 'last_scan_count', 'min_word_count', 'post_types', 'scan_frequency' );
 
-		// Copy each legacy value onto the new name, then remove the legacy copy —
+		// Copy each legacy value onto the new name, then remove the legacy copy -
 		// per option, so the delete only ever runs after a successful copy. (A
 		// single shared guard would delete on a deactivate/reactivate cycle, where
 		// activation re-stamps the new db_version before the copy could run.)
@@ -312,6 +312,15 @@ class Plugin {
 		dbDelta( $sql_links );
 		dbDelta( $sql_stats );
 		dbDelta( $sql_suggestions );
+
+		// dbDelta() reports no failure, so the tables are looked up. Without the
+		// version stamp, maybe_install() tries again on the next admin request.
+		foreach ( array( $table_links, $table_stats, $table_suggestions ) as $table ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Schema check right after creating the tables.
+			if ( $table !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) ) ) {
+				return;
+			}
+		}
 
 		update_option( 'dragoninternallinks_db_version', DRAGONINTERNALLINKS_VERSION );
 	}
