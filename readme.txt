@@ -4,7 +4,7 @@ Tags: internal links, seo, orphan content, link building, site structure
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.1.13
+Stable tag: 1.1.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -96,6 +96,9 @@ Yes! Configure which post types to scan in Settings.
 Keywords are matched as whole words, so suggestions work in languages that put spaces between words, in any script (Latin, Cyrillic, Greek and others). Languages written without spaces between words, such as Chinese, Japanese and Thai, are not matched, so they get no suggestions.
 
 == Changelog ==
+
+= 1.1.14 =
+* Changed: when applying a suggestion fails, the reason now shows as a notice at the top of the screen (and is announced to screen readers) instead of a browser pop-up.
 
 = 1.1.13 =
 * Fixed: an AI API key is now saved exactly as you type it. A key containing a percent sign followed by two hex digits, an angle bracket or a double space was altered when saved.

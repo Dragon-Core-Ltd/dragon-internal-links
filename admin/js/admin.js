@@ -4,6 +4,24 @@
 (function($) {
     'use strict';
 
+    // Show a result as a WordPress admin notice (no browser dialog), announced to screen readers.
+    function showNotice(message, type) {
+        var $wrap = $('.wrap').first();
+        $wrap.find('.dil-js-notice').remove();
+        var $notice = $('<div class="notice is-dismissible dil-js-notice"><p></p></div>').addClass('notice-' + (type || 'error'));
+        $notice.find('p').text(message);
+        var $heading = $wrap.find('h1').first();
+        if ($heading.length) {
+            $heading.after($notice);
+        } else {
+            $wrap.prepend($notice);
+        }
+        $(document).trigger('wp-updates-notice-added');
+        if (window.wp && wp.a11y && wp.a11y.speak) {
+            wp.a11y.speak(message, 'error' === (type || 'error') ? 'assertive' : 'polite');
+        }
+    }
+
     // Scan All Posts
     $('#dil-scan-all').on('click', function() {
         const $btn = $(this);
@@ -144,12 +162,12 @@
                         });
                     }, 500);
                 } else {
-                    alert(response.data.message || dilAdmin.i18n.error);
+                    showNotice((response.data && response.data.message) || dilAdmin.i18n.error, 'error');
                     $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
                 }
             },
             error: function() {
-                alert(dilAdmin.i18n.error);
+                showNotice(dilAdmin.i18n.error, 'error');
                 $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
             }
         });

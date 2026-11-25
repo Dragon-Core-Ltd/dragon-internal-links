@@ -180,7 +180,7 @@ class Admin {
 		wp_enqueue_script(
 			'dil-admin',
 			DRAGONINTERNALLINKS_PLUGIN_URL . 'admin/js/admin.js',
-			array( 'jquery' ),
+			array( 'jquery', 'wp-a11y' ),
 			DRAGONINTERNALLINKS_VERSION,
 			true
 		);
