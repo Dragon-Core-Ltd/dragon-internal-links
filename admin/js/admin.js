@@ -5,16 +5,23 @@
     'use strict';
 
     // Show a result as a WordPress admin notice (no browser dialog), announced to screen readers.
-    function showNotice(message, type) {
+    // With $target, the notice goes inside that element (e.g. the card whose action failed).
+    function showNotice(message, type, $target) {
         var $wrap = $('.wrap').first();
         $wrap.find('.dil-js-notice').remove();
         var $notice = $('<div class="notice is-dismissible dil-js-notice"><p></p></div>').addClass('notice-' + (type || 'error'));
         $notice.find('p').text(message);
         var $heading = $wrap.find('h1').first();
-        if ($heading.length) {
+        if ($target && $target.length) {
+            $notice.addClass('inline');
+            $target.prepend($notice);
+        } else if ($heading.length) {
             $heading.after($notice);
         } else {
             $wrap.prepend($notice);
+        }
+        if ($notice[0].scrollIntoView) {
+            $notice[0].scrollIntoView({ block: 'nearest' });
         }
         $(document).trigger('wp-updates-notice-added');
         if (window.wp && wp.a11y && wp.a11y.speak) {
@@ -162,12 +169,12 @@
                         });
                     }, 500);
                 } else {
-                    showNotice((response.data && response.data.message) || dilAdmin.i18n.error, 'error');
+                    showNotice((response.data && response.data.message) || dilAdmin.i18n.error, 'error', $card);
                     $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
                 }
             },
             error: function() {
-                showNotice(dilAdmin.i18n.error, 'error');
+                showNotice(dilAdmin.i18n.error, 'error', $card);
                 $btn.prop('disabled', false).empty().append('<span class="dashicons dashicons-yes"></span> ').append(document.createTextNode(dilAdmin.i18n.applyLink));
             }
         });
