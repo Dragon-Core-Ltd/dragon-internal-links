@@ -421,11 +421,12 @@
 	border-radius: 5px;
 }
 
+/* focus follows the admin colour scheme (WordPress blue by default): a red ring reads as a validation error */
 .dragon-ui input:focus,
 .dragon-ui select:focus,
 .dragon-ui textarea:focus {
-	border-color: var(--dragon-accent);
-	box-shadow: 0 0 0 1px var(--dragon-accent);
+	border-color: var(--wp-admin-theme-color, #2271b1);
+	box-shadow: 0 0 0 1px var(--wp-admin-theme-color, #2271b1);
 }
 
 /* ————— Page title action: the screen's one primary ————— */
@@ -471,14 +472,16 @@
 .dragon-toolbar .subsubsub {
 	float: none;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 2px;
 	margin: 0 0 0 auto;
-	white-space: nowrap;
 }
 
+/* each filter stays whole; the row wraps between them on narrow screens */
 .dragon-toolbar .subsubsub li {
 	margin: 0;
+	white-space: nowrap;
 }
 
 .dragon-toolbar .search-box {
