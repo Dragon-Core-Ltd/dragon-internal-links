@@ -98,7 +98,7 @@ Keywords are matched as whole words, so suggestions work in languages that put s
 == Changelog ==
 
 = 1.1.14 =
-* Changed: when applying a suggestion fails, the reason now shows as a notice at the top of the screen (and is announced to screen readers) instead of a browser pop-up.
+* Changed: when applying a suggestion fails, the reason now shows as a notice on that suggestion (and is announced to screen readers) instead of a browser pop-up.
 
 = 1.1.13 =
 * Fixed: an AI API key is now saved exactly as you type it. A key containing a percent sign followed by two hex digits, an angle bracket or a double space was altered when saved.
